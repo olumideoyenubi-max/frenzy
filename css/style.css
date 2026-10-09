@@ -12,6 +12,11 @@
   --land: #efe6cf;
   --road: #cfc3a3;
   --chip: #f1ecdf;
+  --accent-soft: #fdebd6;
+  --wall: #e9c79f;
+  --floor-a: #f3e7cf;
+  --floor-b: #e6d6b6;
+  --window: #bfe0ea;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 4px 16px rgba(0, 0, 0, 0.04);
   color-scheme: light;
 }
@@ -31,6 +36,11 @@
     --land: #2a271e;
     --road: #4b4535;
     --chip: #2b2920;
+    --accent-soft: #3a2a14;
+    --wall: #5a4128;
+    --floor-a: #3a3326;
+    --floor-b: #2f2a1f;
+    --window: #173540;
     --shadow: none;
     color-scheme: dark;
   }
@@ -50,6 +60,11 @@
   --land: #2a271e;
   --road: #4b4535;
   --chip: #2b2920;
+  --accent-soft: #3a2a14;
+  --wall: #5a4128;
+  --floor-a: #3a3326;
+  --floor-b: #2f2a1f;
+  --window: #173540;
   --shadow: none;
   color-scheme: dark;
 }
@@ -200,7 +215,7 @@ dialog {
   border: 1px solid var(--line);
   border-radius: 18px;
   padding: 0;
-  width: min(560px, calc(100vw - 32px));
+  width: min(640px, calc(100vw - 32px));
   max-height: calc(100vh - 48px);
   background: var(--panel);
   color: var(--ink);
@@ -245,4 +260,53 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.5); }
 @media (max-width: 520px) {
   .row { grid-template-columns: minmax(0, 1fr); }
   .row .btns { justify-content: flex-start; }
+}
+
+/* Identity */
+.who { display: flex; gap: 0.75rem; align-items: center; }
+.who .name, .welcome .name { font-weight: 800; font-size: 1.15rem; }
+.avatar { display: block; flex: none; }
+.welcome { display: flex; gap: 1rem; align-items: center; margin-bottom: 1rem; }
+
+/* Home room */
+.room > svg { width: 100%; height: auto; display: block; border-radius: 12px; }
+#home + .panel-head { margin-top: 1rem; }
+.wall { fill: var(--wall); }
+.floor-a { fill: var(--floor-a); }
+.floor-b { fill: var(--floor-b); }
+.window { fill: var(--window); stroke: var(--ink); stroke-width: 2; }
+.furn { font-size: 26px; }
+.room-empty { fill: var(--muted); font-size: 12px; }
+.room + .sub { margin: 0.4rem 0 0; }
+.goals li.dream { font-weight: 700; }
+
+/* New life setup */
+.steps { display: flex; gap: 6px; margin-bottom: 1rem; }
+.steps span { flex: 1; height: 4px; border-radius: 99px; background: var(--line); }
+.steps span.on { background: var(--accent); }
+.setup-look { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 1rem; align-items: start; }
+.avatar-preview { background: var(--chip); border-radius: 16px; display: grid; place-items: center; padding: 0.75rem 0.5rem; }
+.field { display: grid; gap: 0.35rem; }
+.field label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.text-input { font: inherit; padding: 0.5rem 0.65rem; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); width: 100%; }
+.swatches, .pills { display: flex; flex-wrap: wrap; gap: 8px; }
+.swatch { width: 34px; height: 34px; border-radius: 50%; border: 2px solid var(--line); padding: 0; }
+.swatch.on { outline: 3px solid var(--accent); outline-offset: 2px; }
+.pill { border-radius: 99px; padding: 0.3rem 0.75rem; font-size: 0.85rem; }
+.pill.on { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 700; }
+.choice-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; }
+.choice { text-align: left; display: grid; gap: 2px; align-content: start; padding: 0.65rem 0.75rem; border-radius: 12px; background: var(--panel); }
+.choice.on { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
+.choice .ic { font-size: 1.3rem; }
+.choice small { color: var(--muted); font-size: 0.8rem; }
+.choice .tag { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); font-weight: 700; }
+.lottery-card { text-align: center; padding: 1.25rem; border-radius: 16px; background: var(--accent-soft); display: grid; gap: 0.5rem; justify-items: center; }
+.lottery-card h3 { font-size: 1.2rem; }
+.lottery-card p { margin: 0; }
+.big-emoji { font-size: 2.6rem; }
+.wizard-nav { display: flex; justify-content: space-between; gap: 0.5rem; margin-top: 1rem; }
+
+@media (max-width: 480px) {
+  .setup-look { grid-template-columns: minmax(0, 1fr); }
+  .tagline { display: none; }
 }

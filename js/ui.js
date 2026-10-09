@@ -1,12 +1,20 @@
 // DOM rendering and input. All game rules live in engine.js.
 
-import { AREAS, ROADS, GOODS, MARKETS, JOBS, HOUSES, MOVE_IN_MONTHS, JAPA } from './data.js';
+import {
+  AREAS, ROADS, GOODS, MARKETS, JOBS, HOUSES, MOVE_IN_MONTHS, JAPA,
+  TRAITS, DREAMS, BACKGROUNDS, STARTS, AVATAR, FURNITURE,
+} from './data.js';
 import * as G from './engine.js';
 
-const SAVE_KEY = 'babi-frenzy-save-v1';
+const SAVE_KEY = 'babi-frenzy-save-v2';
+const SAVE_VERSION = 2;
 const $ = (sel) => document.querySelector(sel);
 const modal = $('#modal');
-let s = window.claude?.hot?.data?.state ?? load() ?? G.newGame();
+const hotState = window.claude?.hot?.data?.state;
+const saved = hotState?.version === SAVE_VERSION ? hotState : load();
+// A placeholder life sits behind the setup screen until the player creates their own.
+let s = saved ?? G.newGame();
+let inSetup = !saved;
 // Keeps the game going when an embedded viewer reloads the page.
 window.claude?.hot?.snapshot?.(() => ({ state: s }));
 
@@ -14,13 +22,14 @@ function load() {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
     const saved = raw && JSON.parse(raw);
-    return saved?.version === 1 ? saved : null;
+    return saved?.version === SAVE_VERSION ? saved : null;
   } catch {
     return null;
   }
 }
 
 function save() {
+  if (inSetup) return;
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(s)); } catch { /* storage unavailable */ }
 }
 
@@ -36,11 +45,56 @@ function render() {
   renderHud();
   renderMap();
   renderActions();
+  renderHome();
   renderGoals();
   renderLog();
   save();
+  if (inSetup) return;
   if (s.ending) openEnding();
   else if (s.pendingEvent) openEvent();
+}
+
+// ---------- avatar ----------
+
+let patternCount = 0;
+const HAIR_INK = '#1d1b16';
+
+function avatarSvg(av, { width = 60, label = 'Your character' } = {}) {
+  const id = `wax${++patternCount}`;
+  const o = av.outfit;
+  const patterns = {
+    stripes: `<rect width="8" height="8" fill="${o}"/><rect y="5" width="8" height="3" fill="#ffffff" opacity=".55"/>`,
+    dots: `<rect width="9" height="9" fill="${o}"/><circle cx="4.5" cy="4.5" r="2.2" fill="#ffffff" opacity=".6"/>`,
+    kente: `<rect width="12" height="12" fill="${o}"/><rect width="6" height="6" fill="${HAIR_INK}" opacity=".5"/><rect x="6" y="6" width="6" height="6" fill="#ffd23f" opacity=".85"/>`,
+  };
+  const size = { stripes: 8, dots: 9, kente: 12 }[av.pattern];
+  const defs = patterns[av.pattern]
+    ? `<defs><pattern id="${id}" width="${size}" height="${size}" patternUnits="userSpaceOnUse">${patterns[av.pattern]}</pattern></defs>` : '';
+  const cloth = patterns[av.pattern] ? `url(#${id})` : o;
+  const back = av.hair === 'afro' ? `<circle cx="30" cy="21" r="16" fill="${HAIR_INK}"/>` : '';
+  const front = {
+    short: `<path d="M18 23 Q19 10 30 10 Q41 10 42 23 Q38 15 30 15 Q22 15 18 23Z" fill="${HAIR_INK}"/>`,
+    afro: '',
+    locks: `<path d="M18 24 Q19 10 30 10 Q41 10 42 24 Q38 15 30 15 Q22 15 18 24Z" fill="${HAIR_INK}"/>`
+      + [16, 20, 38, 42].map((x) => `<rect x="${x}" y="19" width="3" height="17" rx="1.5" fill="${HAIR_INK}"/>`).join(''),
+    foulard: `<path d="M16 24 Q16 6 30 6 Q44 6 44 24 Q38 14 30 14 Q22 14 16 24Z" fill="${cloth}"/><circle cx="43" cy="11" r="4.5" fill="${cloth}"/>`,
+  }[av.hair] ?? '';
+  return `<svg class="avatar" viewBox="0 0 60 80" width="${width}" height="${Math.round(width * 4 / 3)}" role="img" aria-label="${esc(label)}">
+    ${defs}${back}
+    <path d="M10 80 Q10 46 30 44 Q50 46 50 80Z" fill="${cloth}"/>
+    <rect x="26" y="34" width="8" height="10" rx="3" fill="${av.skin}"/>
+    <circle cx="30" cy="25" r="12" fill="${av.skin}"/>
+    <circle cx="25.5" cy="25" r="1.4" fill="${HAIR_INK}"/><circle cx="34.5" cy="25" r="1.4" fill="${HAIR_INK}"/>
+    <path d="M26 30 Q30 33.5 34 30" stroke="${HAIR_INK}" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+    ${front}
+  </svg>`;
+}
+
+function mood(v) {
+  if (v >= 70) return '😄 Happy';
+  if (v >= 45) return '🙂 Fine';
+  if (v >= 25) return '😟 Stressed';
+  return '😞 Down';
 }
 
 function bar(label, value, cls = '') {
@@ -55,6 +109,14 @@ function renderHud() {
   const owned = Object.entries(s.items).filter(([, v]) => v).map(([k]) => k);
   const inv = Object.entries(s.inventory).map(([k, v]) => `${v.qty} × ${GOODS[k].name}`);
   $('#hud').innerHTML = `
+    <div class="hud-block who">
+      ${avatarSvg(s.avatar, { width: 48, label: s.name })}
+      <div>
+        <div class="name">${esc(s.name)}</div>
+        <div class="sub">${mood(s.happiness)}</div>
+        <div class="sub">${s.traits.map((id) => `${TRAITS[id].icon} ${esc(TRAITS[id].name)}`).join(' · ')}</div>
+      </div>
+    </div>
     <div class="hud-block">
       <h3>Day ${s.day}</h3>
       <div class="big">${G.clock(s.hour)}</div>
@@ -79,7 +141,8 @@ function renderHud() {
     </div>
     <div class="hud-block">
       <h3>Life</h3>
-      <div class="sub">🏠 ${h ? `${esc(h.name)} · ${rentLeft >= 0 ? `rent ends in ${rentLeft} days` : `<span class="warn">rent overdue ${-rentLeft} days!</span>`}` : '<span class="warn">Homeless</span>'}</div>
+      <div class="sub">🏠 ${!h ? '<span class="warn">Homeless</span>' : !h.monthly ? `${esc(h.name)} · no rent`
+        : `${esc(h.name)} · ${rentLeft >= 0 ? `rent due in ${rentLeft} days` : `<span class="warn">rent overdue ${-rentLeft} days!</span>`}`}</div>
       <div class="sub">💼 ${job ? esc(job.title) : 'No job yet'}</div>
       <div class="chips" style="margin-top:.4rem">
         <span class="chip">Tech ${s.skills.tech}</span>
@@ -96,12 +159,12 @@ function renderMap() {
   const roads = ROADS.map(([a, b]) => `<line class="road" x1="${AREAS[a].x}" y1="${AREAS[a].y}" x2="${AREAS[b].x}" y2="${AREAS[b].y}"/>`).join('');
   const areas = Object.entries(AREAS).map(([id, a]) => {
     const cls = ['area', id === s.area ? 'here' : '', id === homeArea ? 'home' : ''].join(' ');
-    const labelBelow = a.y < 120 || ['adjame', 'portbouet'].includes(id);
+    const labelBelow = a.y < 120 || ['adjame', 'portbouet'].includes(id) || id === s.area;
     const ty = labelBelow ? a.y + 28 : a.y - 18;
     return `<g class="${cls}" data-area="${id}" tabindex="0" role="button" aria-label="Travel to ${esc(a.name)}${id === s.area ? ' (you are here)' : ''}">
       <circle cx="${a.x}" cy="${a.y}" r="11"/>
       <text x="${a.x}" y="${ty}" text-anchor="middle">${esc(a.name)}</text>
-      ${id === s.area ? `<text class="you" x="${a.x}" y="${a.y + 6}" text-anchor="middle">🧍🏾</text>` : ''}
+      ${id === s.area ? `<g class="you" transform="translate(${a.x - 12} ${a.y - 36})">${avatarSvg(s.avatar, { width: 24, label: 'You' })}</g>` : ''}
     </g>`;
   }).join('');
   $('#map').innerHTML = `
@@ -149,7 +212,40 @@ function renderActions() {
 }
 
 function renderGoals() {
-  $('#goals').innerHTML = G.GOALS.map((g) => `<li class="${s.goals[g.id] ? 'done' : ''}">${esc(g.label)}</li>`).join('');
+  $('#goals').innerHTML = G.goalList(s)
+    .map((g) => `<li class="${[s.goals[g.id] ? 'done' : '', g.dream ? 'dream' : ''].join(' ')}">${g.dream ? DREAMS[s.dream].icon + ' ' : ''}${esc(g.label)}</li>`)
+    .join('');
+}
+
+// Where each piece of furniture sits in the room drawing (x, y in a 320 x 160 room).
+const ROOM_SPOTS = {
+  ac: [100, 26], mattress: [48, 112], net: [48, 80], fan: [104, 104], desk: [156, 82], stove: [208, 82],
+  tv: [264, 82], speaker: [208, 128], sofa: [264, 128], dog: [156, 132],
+};
+
+function renderHome() {
+  const h = G.house(s);
+  if (!h) {
+    $('#home').innerHTML = '<p class="sub">You have no home. Find a housing agent and save up for the move-in fee.</p>';
+    return;
+  }
+  const items = Object.keys(FURNITURE).filter((id) => G.owns(s, id));
+  const here = G.canSleepAtHome(s);
+  $('#home').innerHTML = `
+    <div class="room">
+      <svg viewBox="0 0 320 160" role="img" aria-label="Your ${esc(h.name)}${items.length ? ` with ${items.map((id) => FURNITURE[id].name).join(', ')}` : ', empty'}">
+        <defs><pattern id="tiles" width="20" height="20" patternUnits="userSpaceOnUse">
+          <rect width="20" height="20" class="floor-a"/><rect width="10" height="10" class="floor-b"/><rect x="10" y="10" width="10" height="10" class="floor-b"/>
+        </pattern></defs>
+        <rect width="320" height="56" class="wall"/>
+        <rect y="56" width="320" height="104" fill="url(#tiles)"/>
+        <rect x="236" y="12" width="56" height="32" rx="3" class="window"/>
+        ${items.map((id) => `<text x="${ROOM_SPOTS[id][0]}" y="${ROOM_SPOTS[id][1]}" class="furn" text-anchor="middle" dominant-baseline="middle">${FURNITURE[id].icon}</text>`).join('')}
+        ${here ? `<g transform="translate(124 92)">${avatarSvg(s.avatar, { width: 30, label: 'You, at home' })}</g>` : ''}
+        ${items.length ? '' : '<text x="160" y="112" text-anchor="middle" class="room-empty">Empty. Buy furniture when you are home.</text>'}
+      </svg>
+    </div>
+    <p class="sub">${esc(h.name)}, ${esc(AREAS[h.area].name)} · ${items.length} of ${Object.keys(FURNITURE).length} items${here ? ' · you are home' : ''}</p>`;
 }
 
 function renderLog() {
@@ -169,7 +265,7 @@ function showModal(title, body, { closable = true } = {}) {
 // Pressing Enter in an amount box should not close the dialog.
 modal.querySelector('form').addEventListener('submit', (e) => { if (document.activeElement?.tagName === 'INPUT') e.preventDefault(); });
 modal.addEventListener('cancel', (e) => { if (!modal.dataset.closable) e.preventDefault(); });
-modal.addEventListener('close', () => { if (!s.ending && s.pendingEvent) openEvent(); });
+modal.addEventListener('close', () => { if (!inSetup && !s.ending && s.pendingEvent) openEvent(); });
 
 function wire(sel, fn) {
   for (const el of $('#modal-body').querySelectorAll(sel)) {
@@ -197,7 +293,7 @@ function openTravel(to) {
 }
 
 function openPanel(id) {
-  ({ market: openMarket, jobs: openJobs, shop: openShop, agent: openAgent, bank: openBank, phone: openPhone })[id]?.();
+  ({ market: openMarket, jobs: openJobs, shop: openShop, agent: openAgent, bank: openBank, phone: openPhone, furnish: openFurnish })[id]?.();
 }
 
 function refresh(fn) {
@@ -279,6 +375,17 @@ function openAgent() {
   wire('[data-house]', (el) => { G.moveHouse(s, el.dataset.house); refresh(openAgent); });
 }
 
+function openFurnish() {
+  const rows = G.furnitureList(s).map((f) => `
+    <div class="row">
+      <div><strong>${f.icon} ${esc(f.name)}</strong><div class="meta">${n(f.price)} · ${esc(f.blurb)}</div>
+        ${f.blocked ? `<div class="${f.owned ? 'meta' : 'why'}">${esc(f.blocked)}</div>` : ''}</div>
+      <div class="btns"><button class="primary" data-furn="${f.id}" ${f.blocked ? 'disabled' : ''}>Buy</button></div>
+    </div>`).join('');
+  showModal('Furnish your home', `<p class="sub">Cash ${n(s.cash)}. Everything is delivered today, and it comes with you if you move.</p>${rows}`);
+  wire('[data-furn]', (el) => { G.buyFurniture(s, el.dataset.furn); refresh(openFurnish); });
+}
+
 function moneyForm(prefix) {
   return `<div class="money-input"><input type="number" min="0" step="1000" inputmode="numeric" id="${prefix}-amt" placeholder="Amount in FCFA">`;
 }
@@ -328,12 +435,12 @@ function openEnding() {
     <p>${esc(e.text)}</p>
     <p class="sub">Days in Babi: ${s.day} · Best net worth: ${n(s.stats.maxNetWorth)} · Shifts worked: ${s.stats.shifts} · Viral skits: ${s.stats.viral}</p>
     <button class="primary" data-again>Play again</button></div>`, { closable: false });
-  wire('[data-again]', () => { s = G.newGame(); modal.close(); render(); });
+  wire('[data-again]', () => openSetup());
 }
 
 function openHelp() {
   showModal('How to play', `<div class="help">
-    <p>You arrive in Abidjan, Babi, with ${n(25000)} and a room in a cour commune in Yopougon. Your goal: <strong>a villa in Riviera Golf</strong>. Or save up and <strong>move abroad</strong> from the embassy in Plateau.</p>
+    <p>You arrive in Abidjan, Babi, with very little money. Your goal is the dream you picked: <strong>${esc(DREAMS[s.dream].blurb)}</strong></p>
     <h3>Each day</h3>
     <ul>
       <li>Every action takes time. The day runs from 06h00 to midnight.</li>
@@ -349,6 +456,7 @@ function openHelp() {
     <h3>Watch out</h3>
     <ul>
       <li>Rent is due every month, and moving in costs ${MOVE_IN_MONTHS} months up front. Miss the rent by more than 7 days and you're out.</li>
+      <li>Furnish your home: a mattress, a fan or a stove make every night and meal better.</li>
       <li>CIE sometimes cuts the power. A generator helps you sleep. Keep your savings in the bank, away from pickpockets.</li>
       <li>If your health hits zero, it's game over. Moving abroad needs ${n(JAPA.proofOfFunds)} in proof of funds.</li>
     </ul>
@@ -373,11 +481,126 @@ $('#btn-sleep').addEventListener('click', () => {
   else askFirst('Sleep rough?', s.home ? 'You are not at home. If you sleep here you may get robbed.' : 'You are homeless. Sleep on a bench tonight?', 'Sleep here', sleepNow);
 });
 $('#btn-new').addEventListener('click', () => {
-  askFirst('Start a new game?', 'Your current progress will be lost.', 'Start over', () => { s = G.newGame(); render(); });
+  askFirst('Start a new life?', 'Your current progress will be lost.', 'Start a new life', openSetup);
 });
 $('#btn-help').addEventListener('click', openHelp);
 
-render();
-// First visit: show the rules first. Closing them brings up any pending event.
-if (s.day === 1 && s.hour === 6 && !s.ending) openHelp();
+// ---------- new life setup ----------
 
+const STEPS = ['Look', 'Personality', 'Dream', 'Birth lottery', 'Home'];
+let draft = null;
+let step = 0;
+
+function openSetup() {
+  inSetup = true;
+  draft = { ...G.DEFAULT_SETUP, name: '', avatar: { ...G.DEFAULT_SETUP.avatar }, traits: [], dream: null, background: null, start: null };
+  step = 0;
+  showStep();
+}
+
+function stepFrame(body, { canNext, nextLabel = 'Continue' }) {
+  const dots = STEPS.map((_, i) => `<span class="${i <= step ? 'on' : ''}"></span>`).join('');
+  return `<div class="steps" aria-label="Step ${step + 1} of ${STEPS.length}">${dots}</div>${body}
+    <div class="wizard-nav">
+      ${step > 0 ? '<button data-back>Back</button>' : '<span></span>'}
+      <button class="primary" data-next ${canNext ? '' : 'disabled'}>${nextLabel}</button>
+    </div>`;
+}
+
+function choiceCards(list, isOn, attr) {
+  return `<div class="choice-grid">${list.map(([id, c]) => `
+    <button class="choice ${isOn(id) ? 'on' : ''}" ${attr}="${id}" aria-pressed="${isOn(id)}">
+      <span class="ic" aria-hidden="true">${c.icon}</span><strong>${esc(c.name)}</strong><small>${esc(c.blurb)}</small>
+    </button>`).join('')}</div>`;
+}
+
+function showStep() {
+  const title = `New life · ${STEPS[step]}`;
+  const opts = { closable: false };
+  const next = () => { step += 1; showStep(); };
+  if (step === 0) {
+    const av = draft.avatar;
+    const sw = (key, values) => values.map((v) => `<button class="swatch ${av[key] === v ? 'on' : ''}" style="background:${v}" data-sw="${key}" data-v="${v}" aria-label="${key} ${v}" aria-pressed="${av[key] === v}"></button>`).join('');
+    const opt = (key, map) => Object.entries(map).map(([v, label]) => `<button class="pill ${av[key] === v ? 'on' : ''}" data-sw="${key}" data-v="${v}" aria-pressed="${av[key] === v}">${esc(label)}</button>`).join('');
+    showModal(title, stepFrame(`
+      <div class="setup-look">
+        <div class="avatar-preview">${avatarSvg(av, { width: 110, label: 'Preview of your character' })}</div>
+        <div class="stack">
+          <div class="field"><label for="setup-name">Name</label>
+            <input class="text-input" id="setup-name" maxlength="24" placeholder="e.g. Kouassi, Aya, Yao" value="${esc(draft.name)}"></div>
+          <div class="field"><label>Skin</label><div class="swatches">${sw('skin', AVATAR.skins)}</div></div>
+          <div class="field"><label>Hair</label><div class="pills">${opt('hair', AVATAR.hair)}</div></div>
+          <div class="field"><label>Outfit colour</label><div class="swatches">${sw('outfit', AVATAR.outfits)}</div></div>
+          <div class="field"><label>Pattern</label><div class="pills">${opt('pattern', AVATAR.patterns)}</div></div>
+        </div>
+      </div>`, { canNext: draft.name.trim().length > 0 }), opts);
+    const input = $('#setup-name');
+    input.addEventListener('input', () => {
+      draft.name = input.value;
+      $('#modal-body [data-next]').disabled = !draft.name.trim();
+    });
+    wire('[data-sw]', (el) => { draft.avatar[el.dataset.sw] = el.dataset.v; showStep(); });
+    wire('[data-next]', next);
+    if (!draft.name) input.focus();
+    return;
+  }
+  if (step === 1) {
+    showModal(title, stepFrame(`<p class="sub">Choose 2 traits for ${esc(draft.name)}. Each one changes how the game plays.</p>
+      ${choiceCards(Object.entries(TRAITS), (id) => draft.traits.includes(id), 'data-trait')}`,
+    { canNext: draft.traits.length === 2, nextLabel: draft.traits.length === 2 ? 'Continue' : `Choose ${2 - draft.traits.length} more` }), opts);
+    wire('[data-trait]', (el) => {
+      const id = el.dataset.trait;
+      if (draft.traits.includes(id)) draft.traits = draft.traits.filter((x) => x !== id);
+      else if (draft.traits.length < 2) draft.traits.push(id);
+      showStep();
+    });
+  } else if (step === 2) {
+    showModal(title, stepFrame(`<p class="sub">What is ${esc(draft.name)}'s big dream? Reach it to win.</p>
+      ${choiceCards(Object.entries(DREAMS), (id) => draft.dream === id, 'data-dream')}`, { canNext: Boolean(draft.dream) }), opts);
+    wire('[data-dream]', (el) => { draft.dream = el.dataset.dream; showStep(); });
+  } else if (step === 3) {
+    const bg = BACKGROUNDS[draft.background];
+    showModal(title, stepFrame(`<p class="sub">Nobody chooses where they are born. Draw to find out what life gave ${esc(draft.name)}.</p>
+      <div class="lottery-card">
+        ${bg ? `<div class="big-emoji" aria-hidden="true">🎟️</div><h3>${esc(bg.name)}</h3><p>${esc(bg.blurb)}</p>`
+          : '<div class="big-emoji" aria-hidden="true">🎲</div><button class="primary" data-draw>Draw</button>'}
+      </div>`, { canNext: Boolean(bg) }), opts);
+    wire('[data-draw]', () => { draft.background = G.drawBackground(); showStep(); });
+  } else {
+    const bonus = BACKGROUNDS[draft.background]?.cash ?? 0;
+    const cards = Object.entries(STARTS).map(([id, st]) => {
+      const h = HOUSES[id];
+      return `<button class="choice ${draft.start === id ? 'on' : ''}" data-start="${id}" aria-pressed="${draft.start === id}">
+        <span class="tag">${esc(st.label)}</span><strong>${esc(h.name)} · ${esc(AREAS[h.area].name)}</strong>
+        <small>${esc(st.blurb)}</small>
+        <small>Start with <b>${n(st.cash + bonus)}</b> · ${h.monthly ? `rent ${n(h.monthly)} a month` : 'no rent'}</small>
+      </button>`;
+    }).join('');
+    showModal(title, stepFrame(`<p class="sub">Where will ${esc(draft.name)} live? The first month is paid.</p><div class="stack">${cards}</div>`,
+      { canNext: Boolean(draft.start), nextLabel: 'Move in' }), opts);
+    wire('[data-start]', (el) => { draft.start = el.dataset.start; showStep(); });
+    wire('[data-next]', () => {
+      inSetup = false;
+      s = G.newGame(undefined, draft);
+      modal.close();
+      render();
+    });
+  }
+  if (step < 4) wire('[data-next]', next);
+  wire('[data-back]', () => { step -= 1; showStep(); });
+}
+
+function openWelcomeBack() {
+  showModal('Welcome back', `<div class="welcome">
+      ${avatarSvg(s.avatar, { width: 72, label: s.name })}
+      <div><div class="name">${esc(s.name)}</div><div class="sub">Day ${s.day} · ${esc(AREAS[s.area].name)} · ${n(G.netWorth(s))}</div>
+      <div class="sub">Dream: ${DREAMS[s.dream].icon} ${esc(DREAMS[s.dream].name)}</div></div>
+    </div>
+    <div class="stack"><button class="primary" data-continue>Continue</button><button data-newlife>New life</button></div>`, { closable: false });
+  wire('[data-continue]', () => { modal.close(); render(); });
+  wire('[data-newlife]', openSetup);
+}
+
+render();
+if (!saved) openSetup();
+else if (!hotState && !s.ending) openWelcomeBack();

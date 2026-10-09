@@ -86,7 +86,10 @@ export const HOUSES = {
   studio: { name: 'Studio in Cocody', area: 'cocody', monthly: 90000, sleep: 70, mood: 0, power: 0.25, clout: 2 },
   appart: { name: 'Two-room apartment in Treichville', area: 'treichville', monthly: 150000, sleep: 80, mood: 2, power: 0.25, clout: 5 },
   zone4: { name: 'Apartment in Marcory Zone 4', area: 'marcory', monthly: 450000, sleep: 90, mood: 3, power: 0.2, clout: 12 },
-  villa: { name: 'Villa in Riviera Golf', area: 'riviera', monthly: 3000000, sleep: 100, mood: 6, power: 0, clout: 30, win: true },
+  villa: { name: 'Villa in Riviera Golf', area: 'riviera', monthly: 3000000, sleep: 100, mood: 6, power: 0, clout: 30 },
+  // Starting homes only; agents don't rent these out.
+  citeu: { name: 'Room at the university residence', area: 'cocody', monthly: 15000, sleep: 60, mood: 0, power: 0.25, clout: 0, startOnly: true },
+  tantie: { name: 'Mat in your tantie\'s living room', area: 'abobo', monthly: 0, sleep: 50, mood: -4, power: 0.3, clout: 0, startOnly: true },
 };
 
 // Moving in: 2 months' advance + 2 months' deposit + 1 month agency fee. The advance covers 60 days.
@@ -105,4 +108,72 @@ export const SHOP_AREA = 'adjame';
 export const JAPA = { area: 'plateau', proofOfFunds: 6000000, fee: 400000, chance: 0.6 };
 export const GEN_FUEL = 1500;
 export const CARRY = { base: 10, car: 40 };
-export const START = { area: 'yopougon', home: 'cour', cash: 25000 };
+
+// ---------- new-life setup ----------
+
+// Pick two. Effects are applied in engine.js through hasTrait().
+export const TRAITS = {
+  hustler: { name: 'Hustler', icon: '💼', blurb: 'Sees money everywhere. Street selling pays 25% more.' },
+  foodie: { name: 'Foodie', icon: '🍲', blurb: 'Lives for garba. Every meal gives +5 extra vibes.' },
+  enjaillement: { name: 'Enjaillement spirit', icon: '🎉', blurb: 'Always ready to party. Nights out give 50% more vibes and clout.' },
+  gym: { name: 'Gym rat', icon: '💪', blurb: 'Starts fitter (+10 health). Sport gives 50% more health.' },
+  talker: { name: 'Smooth talker', icon: '😎', blurb: 'Starts with +10 charm and learns charm faster.' },
+  lazy: { name: 'Lazy bone', icon: '😴', blurb: 'Sleeps like a baby (+10 energy a night), but shifts drain 5 more energy.' },
+  clean: { name: 'Clean and careful', icon: '🧼', blurb: 'Never catches malaria. Sleeping rough hurts half as much.' },
+  nightowl: { name: 'Night owl', icon: '🌙', blurb: 'Nights out cost no energy.' },
+  tech: { name: 'Tech bro or sis', icon: '💻', blurb: 'Starts with +10 tech and learns tech faster.' },
+  musical: { name: 'Musical', icon: '🎵', blurb: 'Auditions are 20% likelier to succeed and pay 50% more.' },
+};
+
+// Your dream is how you win.
+export const DREAMS = {
+  villa: { name: 'Big boss of Babi', icon: '🏡', blurb: 'Move into a villa in Riviera Golf.' },
+  landlord: { name: 'Cocody landlord', icon: '💰', blurb: 'Build a net worth of 10 million FCFA.' },
+  star: { name: 'Coupé-décalé star', icon: '🎤', blurb: 'Land 5 music video roles and reach 100 clout.' },
+  unicorn: { name: 'Babi unicorn', icon: '🦄', blurb: 'Reach 100 tech and land the remote senior engineer job.' },
+  abroad: { name: 'Go abroad', icon: '✈️', blurb: 'Get a visa at the embassy in Plateau.' },
+};
+
+// The birth lottery: one is drawn at random for each new life.
+export const BACKGROUNDS = {
+  street: { name: 'Raised by the streets of Yop', weight: 3, cash: 0, skills: { trade: 5, charm: 5 },
+    blurb: 'No money, but you know how the street works. +5 trade, +5 charm.' },
+  village: { name: 'Village kid from Korhogo', weight: 3, cash: 5000, health: 10, skills: { trade: 3 },
+    blurb: 'Strong body, small savings. +5,000 FCFA, +10 health, +3 trade.' },
+  maquis: { name: 'Your parents run a maquis', weight: 2, cash: 15000, skills: { trade: 8 },
+    blurb: 'You grew up counting coins behind the counter. +15,000 FCFA, +8 trade.' },
+  fonctionnaire: { name: 'Child of a Plateau civil servant', weight: 2, cash: 40000, skills: { charm: 5 },
+    blurb: 'Papa has a pension and a network. +40,000 FCFA, +5 charm.' },
+  diaspora: { name: 'Cousin in Paris sends money', weight: 1, cash: 60000, happiness: 10,
+    blurb: 'A transfer lands now and then. +60,000 FCFA, +10 vibes.' },
+  tontine: { name: 'You just won the tontine', weight: 1, cash: 80000,
+    blurb: 'The savings circle paid out to you this month. +80,000 FCFA.' },
+};
+
+// Where a new life can start. Rent for the first month is already paid.
+export const STARTS = {
+  cour: { label: 'Balanced', cash: 25000, blurb: 'A room around a shared courtyard. Cheap rent, lively neighbours.' },
+  citeu: { label: 'Student', cash: 20000, blurb: 'A room in the university residence in Cocody, next to the coding bootcamp.' },
+  tantie: { label: 'Hard start', cash: 10000, blurb: 'A mat in your tantie\'s living room in Abobo. No rent, no privacy.' },
+};
+
+export const AVATAR = {
+  skins: ['#f1c7a1', '#d39b6a', '#a8693f', '#7a4a2a', '#4a2c1a'],
+  outfits: ['#f77f00', '#009e60', '#c7362b', '#1f5fbf', '#7b3fa0', '#e8b100'],
+  patterns: { plain: 'Plain', stripes: 'Stripes', dots: 'Wax dots', kente: 'Kente checks' },
+  hair: { short: 'Short', afro: 'Afro', locks: 'Locks', foulard: 'Head wrap' },
+};
+
+// Furniture for your home. Items move with you when you change house.
+export const FURNITURE = {
+  mattress: { name: 'Foam mattress', icon: '🛏️', price: 25000, blurb: '+10 energy every night at home.' },
+  net: { name: 'Mosquito net', icon: '🕸️', price: 5000, blurb: 'No more malaria.' },
+  fan: { name: 'Standing fan', icon: '🌀', price: 15000, blurb: 'Power cuts hurt your sleep half as much.' },
+  stove: { name: 'Gas stove and pots', icon: '🍳', price: 30000, blurb: 'Cook at home for 300 FCFA a meal.' },
+  speaker: { name: 'Bluetooth speaker', icon: '🔊', price: 20000, blurb: '+2 vibes every night.' },
+  desk: { name: 'Desk and books', icon: '📚', price: 35000, blurb: 'Study at home for +2 tech.' },
+  tv: { name: 'TV with satellite', icon: '📺', price: 80000, blurb: 'Watching TV at home gives +8 more vibes.' },
+  dog: { name: 'A dog called Drogba', icon: '🐕', price: 40000, blurb: '+4 vibes a night. Toughs think twice.' },
+  sofa: { name: 'Leather sofa', icon: '🛋️', price: 120000, clout: 3, blurb: '+3 vibes a night, +3 clout.' },
+  ac: { name: 'Air conditioner', icon: '❄️', price: 350000, clout: 5, blurb: '+10 energy a night when the power is on. +5 clout.' },
+};

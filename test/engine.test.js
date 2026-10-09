@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as G from '../js/engine.js';
-import { AREAS } from '../js/data.js';
+import { AREAS, BACKGROUNDS } from '../js/data.js';
 
 function fresh(seed = 42) {
   const s = G.newGame(seed);
@@ -120,7 +120,7 @@ test('moving into a Riviera Golf villa wins the game', () => {
   s.cash = 100_000_000;
   assert.ok(G.moveHouse(s, 'villa'));
   assert.equal(s.ending.kind, 'win');
-  assert.equal(s.goals.villa, true);
+  assert.equal(s.goals.dream, true);
   assert.equal(s.cash, 100_000_000 - 5 * 3_000_000);
 });
 
@@ -178,4 +178,78 @@ test('a long random playthrough never breaks the state', () => {
     assert.ok(s.cash >= 0, `cash went negative on day ${s.day}`);
     assert.ok(s.hour <= 24);
   }
+});
+
+test('setup choices shape the new life', () => {
+  const s = G.newGame(9, { name: 'Aya', traits: ['tech', 'gym'], dream: 'unicorn', background: 'tontine', start: 'citeu' });
+  assert.equal(s.name, 'Aya');
+  assert.equal(s.area, 'cocody');
+  assert.equal(s.cash, 20000 + 80000);
+  assert.equal(s.skills.tech, 10);
+  assert.equal(s.dream, 'unicorn');
+});
+
+test('the tantie start has no rent and is never evicted', () => {
+  const s = G.newGame(3, { start: 'tantie' });
+  assert.equal(G.actions(s).some((a) => a.id === 'rent'), false);
+  for (let i = 0; i < 45 && !s.ending; i++) {
+    s.pendingEvent = null;
+    s.today.ate = true;
+    s.health = 100;
+    G.sleep(s);
+  }
+  assert.equal(s.home.id, 'tantie');
+});
+
+test('starting homes are not offered by housing agents', () => {
+  const s = fresh();
+  s.area = 'cocody';
+  assert.deepEqual(G.housesHere(s).map((h) => h.id), ['studio']);
+});
+
+test('the birth lottery only draws real backgrounds', () => {
+  for (const r of [0, 0.3, 0.6, 0.999]) assert.ok(BACKGROUNDS[G.drawBackground(() => r)]);
+});
+
+test('furniture is bought at home and improves sleep', () => {
+  const a = fresh(11);
+  const b = fresh(11);
+  b.cash = 100000;
+  assert.ok(G.buyFurniture(b, 'mattress'));
+  assert.equal(G.buyFurniture(b, 'mattress'), false, 'cannot buy twice');
+  a.energy = b.energy = 20;
+  a.today.ate = b.today.ate = true;
+  G.sleep(a);
+  G.sleep(b);
+  assert.equal(b.energy - a.energy, 10);
+  b.area = 'plateau';
+  assert.equal(G.buyFurniture(b, 'fan'), false, 'only at home');
+});
+
+test('a stove lets you cook at home', () => {
+  const s = fresh();
+  s.cash = 100000;
+  G.buyFurniture(s, 'stove');
+  const before = s.cash;
+  G.act(s, 'cook');
+  assert.equal(s.today.ate, true);
+  assert.equal(s.cash, before - 300);
+});
+
+test('traits change outcomes', () => {
+  const owl = G.newGame(4, { traits: ['nightowl', 'hustler'] });
+  owl.pendingEvent = null;
+  owl.hour = 19;
+  const energy = owl.energy;
+  G.act(owl, 'maquis');
+  assert.equal(owl.energy, energy, 'night owls party for free');
+});
+
+test('reaching the landlord dream wins', () => {
+  const s = G.newGame(8, { dream: 'landlord' });
+  s.pendingEvent = null;
+  s.bank = 10_000_000;
+  G.deposit(s, 1);
+  G.act(s, 'eat');
+  assert.equal(s.ending?.kind, 'win');
 });
