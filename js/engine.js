@@ -509,6 +509,10 @@ export function actions(s) {
     if (owns(s, 'stove')) add('cook', 'Cook at home', `1h · ${cfa(300)} · +20 energy, +5 health`, { hours: 1, cost: 300, group: 'life' });
     const once = (id) => (s.today.homeDone.includes(id) ? 'Already done today' : null);
     const home = (id, label, desc, opts) => { add(id, label, desc, { ...opts, group: 'home' }); const a = list[list.length - 1]; a.blocked ??= once(id); };
+    home('nap', 'Take a nap', '1h · +15 energy', { hours: 1 });
+    home('liein', 'Stay in bed scrolling', '2h · +5 energy, +6 vibes', { hours: 2 });
+    home('wash', 'Have a bucket bath', '30 min · +2 health, +3 vibes', { hours: 0.5 });
+    if (owns(s, 'dog')) home('playdog', 'Play with Drogba', '30 min · +5 vibes', { hours: 0.5 });
     home('callmaman', 'Call Maman', '30 min · +8 vibes · she might send something', { hours: 0.5 });
     home('dance', 'Dance to coupé-décalé', '1h · +6 vibes, +2 health · -5 energy', { hours: 1, energy: 5 });
     home('daydream', 'Daydream about going abroad', '30 min · +3 vibes', { hours: 0.5 });
@@ -639,6 +643,28 @@ export function act(s, id) {
       addStat(s, 'happiness', meal(s, 0));
       s.today.ate = true;
       log(s, 'You cooked attiéké with sauce graine at home. Cheap and tasty.');
+      break;
+    case 'nap':
+      s.today.homeDone.push(id);
+      addStat(s, 'energy', 15);
+      log(s, 'You took a short nap. +15 energy.');
+      break;
+    case 'liein':
+      s.today.homeDone.push(id);
+      addStat(s, 'energy', 5);
+      addStat(s, 'happiness', 6);
+      log(s, 'You stayed in bed scrolling through TikTok and WhatsApp statuses. Bliss.');
+      break;
+    case 'wash':
+      s.today.homeDone.push(id);
+      addStat(s, 'health', 2);
+      addStat(s, 'happiness', 3);
+      log(s, 'A cool bucket bath. You feel brand new.');
+      break;
+    case 'playdog':
+      s.today.homeDone.push(id);
+      addStat(s, 'happiness', 5);
+      log(s, 'You played fetch with Drogba until he flopped down in the shade.');
       break;
     case 'callmaman': {
       s.today.homeDone.push(id);
@@ -1172,7 +1198,7 @@ export function socialOptions(s, id) {
     .map(([k, a]) => {
       let blocked = null;
       if (!here) blocked = `${p.name} isn't here right now`;
-      else if (relation(s, id) < a.min) blocked = `Needs ${levelName(a.min).toLowerCase()} level (${a.min})`;
+      else if (relation(s, id) < a.min) blocked = `Needs a bond of ${a.min}`;
       else if (done.includes(k)) blocked = 'Already done today';
       else if (k === 'favour' && (s.favours[id] ?? -99) + FAVOUR_COOLDOWN[p.perk] > s.day) blocked = 'Ask again later';
       else if (a.cost && a.cost > s.cash) blocked = 'Not enough cash';

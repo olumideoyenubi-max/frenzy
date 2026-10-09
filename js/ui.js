@@ -205,24 +205,13 @@ function renderActions() {
       if (panel) openPanel(panel);
     });
   }
-  renderPeople();
+  renderStreet();
   const unread = G.unreadCount(s);
   $('#phone-badge').hidden = !unread;
   $('#phone-badge').textContent = unread;
   const sleepBtn = $('#btn-sleep');
   sleepBtn.textContent = G.canSleepAtHome(s) ? '🛏 Sleep at home' : '🛏 Sleep rough here';
   sleepBtn.title = G.canSleepAtHome(s) ? 'End the day' : 'You are not at home. Sleeping here is risky.';
-}
-
-function renderPeople() {
-  const here = G.peopleHere(s);
-  $('#people').innerHTML = here.length ? `<div class="group-title">People here</div>
-    <div class="people">${here.map((p) => `
-      <button class="person" type="button" data-person="${p.id}">
-        ${avatarSvg(p.look, { width: 34, label: p.name })}
-        <span><strong>${esc(p.name)}</strong><small>${esc(p.level)}${p.rel ? ` · ${p.rel}` : ''}</small></span>
-      </button>`).join('')}</div>` : '';
-  for (const b of document.querySelectorAll('[data-person]')) b.addEventListener('click', () => openPerson(b.dataset.person));
 }
 
 function relBar(rel) {
@@ -252,10 +241,98 @@ function renderGoals() {
     .join('');
 }
 
-// Where each piece of furniture sits in the room drawing (x, y in a 320 x 160 room).
-const ROOM_SPOTS = {
-  ac: [100, 26], mattress: [48, 112], net: [48, 80], fan: [104, 104], desk: [156, 82], stove: [208, 82],
-  tv: [264, 82], speaker: [208, 128], sofa: [264, 128], dog: [156, 132],
+// ---------- walking scenes ----------
+// Your character walks to wherever you click, and walks up to objects and people before using them.
+// Positions live only in the page (not the save): each scene remembers where you last stood.
+
+const scenePos = { home: { x: 190, y: 170 }, street: { x: 60, y: 120 } };
+const reduceMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+let walking = false;
+
+function avatarGroup(av, scene, label) {
+  const { x, y } = scenePos[scene];
+  return `<g class="walker" id="walker-${scene}" style="transform: translate(${x - 15}px, ${y - 40}px)">
+    <g class="walker-body"><g class="bobber">${avatarSvg(av, { width: 30, label })}</g></g>
+    <text class="bubble" x="15" y="-4" text-anchor="middle"></text>
+  </g>`;
+}
+
+function svgPoint(svg, evt) {
+  const pt = svg.createSVGPoint();
+  pt.x = evt.clientX;
+  pt.y = evt.clientY;
+  return pt.matrixTransform(svg.getScreenCTM().inverse());
+}
+
+// Walks the avatar in `scene` to (x, y), then calls done().
+function walkTo(scene, x, y, done = () => {}) {
+  const el = document.getElementById(`walker-${scene}`);
+  if (!el || walking) return;
+  const from = scenePos[scene];
+  const dist = Math.hypot(x - from.x, y - from.y);
+  const secs = reduceMotion() ? 0 : Math.min(2.2, dist / 110);
+  scenePos[scene] = { x, y };
+  el.classList.toggle('left', x < from.x);
+  el.classList.add('moving');
+  el.style.transition = `transform ${secs}s linear`;
+  el.style.transform = `translate(${x - 15}px, ${y - 40}px)`;
+  walking = true;
+  setTimeout(() => {
+    walking = false;
+    el.classList.remove('moving');
+    done();
+  }, secs * 1000);
+}
+
+// Shows a bubble over the avatar for a moment (e.g. 💤 while napping), then calls done().
+// `at` moves the avatar onto something first, like the bed.
+function perform(scene, icon, pose, done, at = null) {
+  const el = document.getElementById(`walker-${scene}`);
+  if (!el) return done();
+  if (at) {
+    el.style.transition = 'none';
+    el.style.transform = `translate(${at.x - 15}px, ${at.y - 40}px)`;
+  }
+  el.querySelector('.bubble').textContent = icon;
+  if (pose) el.classList.add(pose);
+  setTimeout(done, reduceMotion() ? 0 : 1300);
+}
+
+function wireScene(svg, scene, onFloor) {
+  svg.addEventListener('click', (e) => {
+    if (e.target.closest('[data-obj]')) return;
+    const p = svgPoint(svg, e);
+    walkTo(scene, Math.max(20, Math.min(340, p.x)), Math.max(onFloor[0], Math.min(onFloor[1], p.y)));
+  });
+}
+
+function bindObjects(svg, handler) {
+  for (const g of svg.querySelectorAll('[data-obj]')) {
+    const go = (e) => { e.stopPropagation(); handler(g.dataset.obj, Number(g.dataset.x), Number(g.dataset.y)); };
+    g.addEventListener('click', go);
+    g.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(e); } });
+  }
+}
+
+// Home objects: where they stand, where you stand to use them, and what you can do there.
+const HOME_OBJECTS = {
+  bed: { x: 62, y: 112, label: 'Bed', acts: ['sleep', 'nap', 'liein'] },
+  chair: { x: 150, y: 124, icon: '🪑', label: 'Chair', acts: ['callmaman', 'daydream', 'whatsapp'] },
+  bucket: { x: 326, y: 196, icon: '🪣', label: 'Bucket', acts: ['wash'] },
+  fan: { x: 112, y: 96, icon: '🌀', label: 'Standing fan', need: 'fan' },
+  net: { x: 62, y: 84, icon: '🕸️', label: 'Mosquito net', need: 'net' },
+  desk: { x: 214, y: 96, icon: '📚', label: 'Desk', need: 'desk', acts: ['study'] },
+  stove: { x: 266, y: 96, icon: '🍳', label: 'Gas stove', need: 'stove', acts: ['cook'] },
+  tv: { x: 318, y: 96, icon: '📺', label: 'TV', need: 'tv', acts: ['relax'] },
+  speaker: { x: 214, y: 186, icon: '🔊', label: 'Speaker', need: 'speaker', acts: ['dance'] },
+  sofa: { x: 268, y: 178, icon: '🛋️', label: 'Sofa', need: 'sofa', acts: ['relax'] },
+  dog: { x: 150, y: 192, icon: '🐕', label: 'Drogba', need: 'dog', acts: ['playdog'] },
+  ac: { x: 100, y: 30, icon: '❄️', label: 'Air conditioner', need: 'ac' },
+};
+// What the avatar shows while doing each thing.
+const PERFORM = {
+  sleep: ['💤', 'lying'], nap: ['💤', 'lying'], liein: ['📱', 'lying'], callmaman: ['📞'], daydream: ['✈️'],
+  whatsapp: ['📱'], wash: ['💦'], study: ['📖'], cook: ['🍲'], relax: ['📺'], dance: ['🎵', 'dancing'], playdog: ['🎾'],
 };
 
 function renderHome() {
@@ -264,23 +341,96 @@ function renderHome() {
     $('#home').innerHTML = '<p class="sub">You have no home. Find a housing agent and save up for the move-in fee.</p>';
     return;
   }
-  const items = Object.keys(FURNITURE).filter((id) => G.owns(s, id));
   const here = G.canSleepAtHome(s);
+  const objs = Object.entries(HOME_OBJECTS).filter(([, o]) => !o.need || G.owns(s, o.need));
+  const bed = G.owns(s, 'mattress')
+    ? '<rect x="-30" y="-12" width="60" height="26" rx="5" class="bed-frame"/><rect x="-28" y="-10" width="18" height="22" rx="4" class="pillow"/>'
+    : '<rect x="-30" y="-10" width="60" height="22" rx="3" class="mat"/>';
+  const objSvg = objs.map(([id, o]) => {
+    const art = id === 'bed' ? bed : `<text class="furn" text-anchor="middle" dominant-baseline="middle">${o.icon}</text>`;
+    return `<g class="obj" data-obj="${id}" data-x="${o.x}" data-y="${o.y}" transform="translate(${o.x} ${o.y})"
+      tabindex="${here ? 0 : -1}" role="button" aria-label="${esc(o.label)}">${art}</g>`;
+  }).join('');
   $('#home').innerHTML = `
     <div class="room">
-      <svg viewBox="0 0 320 160" role="img" aria-label="Your ${esc(h.name)}${items.length ? ` with ${items.map((id) => FURNITURE[id].name).join(', ')}` : ', empty'}">
+      <svg viewBox="0 0 360 220" id="home-scene" role="group" aria-label="Your ${esc(h.name)}. ${here ? 'Click the floor to walk, or an object to use it.' : 'You are out.'}">
         <defs><pattern id="tiles" width="20" height="20" patternUnits="userSpaceOnUse">
           <rect width="20" height="20" class="floor-a"/><rect width="10" height="10" class="floor-b"/><rect x="10" y="10" width="10" height="10" class="floor-b"/>
         </pattern></defs>
-        <rect width="320" height="56" class="wall"/>
-        <rect y="56" width="320" height="104" fill="url(#tiles)"/>
-        <rect x="236" y="12" width="56" height="32" rx="3" class="window"/>
-        ${items.map((id) => `<text x="${ROOM_SPOTS[id][0]}" y="${ROOM_SPOTS[id][1]}" class="furn" text-anchor="middle" dominant-baseline="middle">${FURNITURE[id].icon}</text>`).join('')}
-        ${here ? `<g transform="translate(124 92)">${avatarSvg(s.avatar, { width: 30, label: 'You, at home' })}</g>` : ''}
-        ${items.length ? '' : '<text x="160" y="112" text-anchor="middle" class="room-empty">Empty. Buy furniture when you are home.</text>'}
+        <rect width="360" height="64" class="wall"/>
+        <rect y="64" width="360" height="156" fill="url(#tiles)"/>
+        <rect x="262" y="14" width="64" height="34" rx="3" class="window"/>
+        <rect x="170" y="10" width="34" height="54" rx="2" class="door"/><circle cx="198" cy="40" r="2" class="knob"/>
+        ${objSvg}
+        ${here ? avatarGroup(s.avatar, 'home', `${s.name}, at home`) : ''}
       </svg>
     </div>
-    <p class="sub">${esc(h.name)}, ${esc(AREAS[h.area].name)} · ${items.length} of ${Object.keys(FURNITURE).length} items${here ? ' · you are home' : ''}</p>`;
+    <p class="sub">${esc(h.name)}, ${esc(AREAS[h.area].name)} · ${here ? 'Click the floor to walk around, or click something to use it.' : 'You are out. Come home to use your things.'}</p>`;
+  if (!here) return;
+  const svg = $('#home-scene');
+  wireScene(svg, 'home', [80, 205]);
+  bindObjects(svg, (id, x, y) => walkTo('home', x, Math.min(205, y + 22), () => openObject(id)));
+}
+
+function openObject(id) {
+  const o = HOME_OBJECTS[id];
+  const list = G.actions(s);
+  const acts = (o.acts ?? []).map((a) => (a === 'sleep'
+    ? { id: 'sleep', label: 'Sleep (end the day)', desc: 'Restores energy overnight', blocked: null }
+    : list.find((x) => x.id === a))).filter(Boolean);
+  const info = o.need ? FURNITURE[o.need].blurb : id === 'bed' && !G.owns(s, 'mattress') ? 'A thin mat on the floor. A foam mattress would help.' : '';
+  showModal(o.label, `${info ? `<p class="sub">${esc(info)}</p>` : ''}
+    <div class="stack">${acts.length ? acts.map((a) => `<button class="action" data-do="${a.id}" ${a.blocked ? 'disabled' : ''}>
+      <strong>${esc(a.label)}</strong><small>${esc(a.desc)}</small>${a.blocked ? `<small class="why"> · ${esc(a.blocked)}</small>` : ''}</button>`).join('')
+      : '<p class="sub">Nothing to do here, but it is working hard for you.</p>'}</div>`);
+  wire('[data-do]', (el) => {
+    const act = el.dataset.do;
+    modal.close();
+    const [icon, pose] = PERFORM[act] ?? ['✨'];
+    const onBed = pose === 'lying' ? { x: HOME_OBJECTS.bed.x + 6, y: HOME_OBJECTS.bed.y + 14 } : null;
+    perform('home', icon, pose, () => {
+      if (act === 'sleep') sleepNow();
+      else {
+        const panel = G.act(s, act);
+        render();
+        if (panel) openPanel(panel);
+      }
+    }, onBed);
+  });
+}
+
+// Street scene: who is around in this commune. Walk up to someone to talk.
+const STREET_SPOTS = [[110, 112], [175, 128], [240, 110], [300, 126]];
+
+function renderStreet() {
+  const here = G.peopleHere(s);
+  const area = AREAS[s.area];
+  const buildings = Array.from({ length: 6 }, (_, i) => {
+    const hgt = 30 + ((i * 29 + area.x) % 34);
+    return `<rect x="${i * 62 + 4}" y="${70 - hgt}" width="54" height="${hgt}" class="bld bld${(i + area.y) % 3}"/>
+      <rect x="${i * 62 + 10}" y="${76 - hgt}" width="42" height="6" class="awning a${(i + area.x) % 3}"/>`;
+  }).join('');
+  const people = here.map((p, i) => {
+    const [x, y] = STREET_SPOTS[i % STREET_SPOTS.length];
+    return `<g class="obj npc" data-obj="${p.id}" data-x="${x}" data-y="${y}" transform="translate(${x - 15} ${y - 40})" tabindex="0" role="button" aria-label="Talk to ${esc(p.name)}, ${esc(p.level)}">
+      ${avatarSvg(p.look, { width: 30, label: p.name })}
+      <text x="15" y="48" text-anchor="middle" class="npc-name">${esc(p.name)}</text></g>`;
+  }).join('');
+  $('#people').innerHTML = `<div class="group-title">Out on the street${here.length ? '' : ' · nobody you know is around right now'}</div>
+    <div class="street-scene">
+      <svg viewBox="0 0 360 160" id="street-scene" role="group" aria-label="Street in ${esc(area.name)}. Click to walk, click a person to talk.">
+        <rect width="360" height="160" class="sky"/>
+        ${buildings}
+        <rect y="70" width="360" height="60" class="pavement"/>
+        <rect y="130" width="360" height="30" class="road"/>
+        ${Array.from({ length: 6 }, (_, i) => `<rect x="${i * 64 + 8}" y="143" width="30" height="3" class="lane"/>`).join('')}
+        ${people}
+        ${avatarGroup(s.avatar, 'street', s.name)}
+      </svg>
+    </div>`;
+  const svg = $('#street-scene');
+  wireScene(svg, 'street', [86, 128]);
+  bindObjects(svg, (id, x, y) => walkTo('street', x < scenePos.street.x ? x + 34 : x - 34, y, () => openPerson(id)));
 }
 
 function renderLog() {
@@ -323,7 +473,7 @@ function openTravel(to) {
     </div>`).join('');
   showModal(`Travel to ${AREAS[to].name}`, `<p class="sub">${km} km from ${esc(AREAS[s.area].name)}. Rush hours (07h–10h and 16h–20h) are slow.</p>${rows}`);
   wire('[data-mode]', (el) => {
-    if (G.travel(s, to, el.dataset.mode)) { render(); showStreet(el.dataset.mode, to); }
+    if (G.travel(s, to, el.dataset.mode)) { scenePos.street = { x: 30, y: 120 }; render(); showStreet(el.dataset.mode, to); }
   });
 }
 

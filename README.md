@@ -19,6 +19,11 @@ Each piece has a real effect on sleep, meals, learning or mood, and it moves wit
 
 ## Around the city
 
+- **Walk around:** click the floor of your room or the street and your character walks there. Click your bed,
+  chair, bucket, stove, TV, desk, speaker or dog and your character walks over, then you choose what to do
+  (sleep, nap, stay in bed, call Maman, have a bucket bath, cook, study, dance) and watch them do it.
+  On the street, click a resident to walk up to them and talk.
+
 - **People of Babi:** 13 residents live their lives around the city, like Tantie Awa at Adjamé market, DJ Koffi in Yopougon
   at night, Grace the Zone 4 founder and Nadia the influencer in Riviera. Say hello, gist, crack jokes, give compliments or gifts.
   Bonds grow from Stranger to Acquaintance, Friend, Padi and Like family. Friends unlock perks: job referrals that skip
