@@ -25,17 +25,21 @@
     <header class="hud">
       <button class="me" id="me" type="button" aria-label="Your life: stats, goals and news"></button>
       <div class="status" id="status"></div>
-      <button class="round" id="btn-help" type="button" aria-label="How to play">?</button>
+      <div class="hud-right">
+        <button class="wallet" id="wallet" type="button" aria-label="Money and life summary"></button>
+        <button class="round" id="btn-help" type="button" aria-label="How to play">?</button>
+      </div>
     </header>
     <div class="meters" id="meters" role="img"></div>
     <p class="place" id="place"></p>
+    <p class="hint" id="hint" hidden></p>
     <div class="toasts" id="toasts" aria-live="polite"></div>
 
     <nav class="tabbar" aria-label="Game sections">
       <button type="button" data-tab="home"><span aria-hidden="true">🏠</span>Home</button>
       <button type="button" data-tab="street"><span aria-hidden="true">🚶🏾</span>Street</button>
+      <button type="button" id="btn-do" class="do" aria-label="Things to do here"><span aria-hidden="true">✨</span>Do</button>
       <button type="button" data-tab="map"><span aria-hidden="true">🗺️</span>Map</button>
-      <button type="button" id="btn-do" class="do"><span aria-hidden="true">✨</span>Do</button>
       <button type="button" id="btn-phone"><span aria-hidden="true">📱</span>Phone<span class="badge" id="phone-badge" hidden></span></button>
     </nav>
   </div>

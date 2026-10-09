@@ -106,16 +106,76 @@ function bar(label, value, cls = '') {
   return `<div class="bar"><span>${label}</span><div class="bar-track"><div class="bar-fill ${cls}${low}" style="width:${value}%"></div></div><span>${Math.round(value)}</span></div>`;
 }
 
+// ---------- shared pieces ----------
+
+const ACT_ICON = {
+  work: '💼', jobs: '📋', hawk: '💧', skit: '🎬', audition: '🎤', eat: '🍛', eat_posh: '🍽️', alloco: '🍢',
+  relax: '📺', cook: '🍳', furnish: '🛋️', nap: '😴', liein: '🛏️', wash: '🚿', playdog: '🐕', callmaman: '📞',
+  dance: '💃🏾', daydream: '✈️', whatsapp: '📲', maquis: '🍻', beach: '🏖️', club: '🪩', football: '⚽', gym: '🏃🏾',
+  bootcamp: '💻', study: '📚', youtube: '▶️', haggle: '🤝', mixer: '🥂', golf: '⛳', market: '🧺', bank: '🏦',
+  shop: '📱', agent: '🔑', rent: '🏠', embassy: '🛂', sleep: '🌙',
+  hello: '👋', gist: '💬', joke: '😂', compliment: '🌟', gift: '🎁', favour: '🙏',
+};
+
+// Turns "1h · 600 FCFA · +20 energy, +4 health" into small chips.
+function chipsFor(desc = '') {
+  return desc.split(' · ')
+    .flatMap((seg) => (seg.split(', ').every((x) => /^[+-]\d/.test(x)) ? seg.split(', ') : [seg]))
+    .filter(Boolean).map((seg) => {
+    let cls = '';
+    let txt = seg;
+    if (/^(\d+(\.\d+)?h|\d+ min)$/.test(seg)) { cls = 'time'; txt = `⏱ ${seg}`; }
+    else if (/^free$/i.test(seg) || /^No time cost$/.test(seg)) cls = 'free';
+    else if (/^\+|^earn|^could pay|^Earn/.test(seg)) cls = 'gain';
+    else if (/^-/.test(seg)) cls = 'drain';
+    else if (/FCFA/.test(seg) && !/earn/.test(seg)) { cls = 'cost'; txt = `💰 ${seg}`; }
+    return `<span class="chip-s ${cls}">${esc(txt)}</span>`;
+  }).join('');
+}
+
+// One tappable action card. `a` has id, label, desc and blocked.
+function actCard(a, attr = 'data-act', icon = ACT_ICON[a.id]) {
+  return `<button class="card-act" type="button" ${attr}="${a.id}" ${a.blocked ? 'disabled' : ''}>
+    <span class="ca-ic" aria-hidden="true">${icon ?? '✨'}</span>
+    <span class="ca-body"><strong>${esc(a.label)}</strong>
+      <span class="ca-chips">${chipsFor(a.desc)}</span>
+      ${a.note ? `<small class="ca-note">${esc(a.note)}</small>` : ''}
+      ${a.blocked ? `<span class="ca-why">🔒 ${esc(a.blocked)}</span>` : ''}</span>
+  </button>`;
+}
+
+// A circular gauge for the HUD.
+function gauge(icon, value, label) {
+  const r = 17;
+  const c = 2 * Math.PI * r;
+  const tone = value >= 50 ? 'ok' : value >= 25 ? 'mid' : 'low';
+  return `<div class="gauge ${tone}" title="${label} ${Math.round(value)}">
+    <svg viewBox="0 0 44 44" aria-hidden="true"><circle cx="22" cy="22" r="${r}" class="g-track"/>
+      <circle cx="22" cy="22" r="${r}" class="g-fill" stroke-dasharray="${(value / 100) * c} ${c}" transform="rotate(-90 22 22)"/></svg>
+    <span class="g-ic" aria-hidden="true">${icon}</span><span class="g-val">${Math.round(value)}</span>
+  </div>`;
+}
+
+const timeOfDay = (h) => (h < 9 ? 'morning' : h < 17 ? 'day' : h < 19.5 ? 'evening' : 'night');
+
 function renderTop() {
-  $('#me').innerHTML = `${avatarSvg(s.avatar, { width: 34, label: s.name })}
+  const ring = s.happiness >= 70 ? 'var(--green)' : s.happiness >= 45 ? 'var(--accent)' : 'var(--red)';
+  $('#me').innerHTML = `<span class="me-ava" style="--ring:${ring}">${avatarSvg(s.avatar, { width: 34, label: s.name })}</span>
     <span class="me-text"><strong>${esc(s.name)}</strong><small>${mood(s.happiness)}</small></span>`;
+  // The clock arc fills as the day goes from 06h00 to midnight.
+  const dayFrac = Math.max(0, Math.min(1, (s.hour - 6) / 18));
+  const arc = 2 * Math.PI * 15;
+  const tod = { morning: '🌅', day: '☀️', evening: '🌇', night: '🌙' }[timeOfDay(s.hour)];
   $('#status').innerHTML = `
-    <span class="pill-part">🗓️ ${esc(G.dateLabel(s.day).replace(/ \d{4}$/, ''))} · <b>${G.clock(s.hour)}</b></span>
-    <span class="pill-part">📍 ${esc(AREAS[s.area].name)}</span>
-    <span class="pill-part money">${n(s.cash)}</span>
-    ${s.today.strike ? '<span class="pill-part warn">🚐 Strike</span>' : ''}${s.today.flood ? '<span class="pill-part warn">🌧 Floods</span>' : ''}`;
-  $('#meters').innerHTML = `${bar('⚡', s.energy)}${bar('❤️', s.health)}${bar('😊', s.happiness)}${bar('⭐', s.clout, 'clout')}`;
+    <span class="clock"><svg viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="15" class="c-track"/>
+      <circle cx="18" cy="18" r="15" class="c-fill" stroke-dasharray="${dayFrac * arc} ${arc}" transform="rotate(-90 18 18)"/></svg>
+      <span class="c-ic">${tod}</span></span>
+    <span class="when"><b>${G.clock(s.hour)}</b><small>${esc(G.dateLabel(s.day).replace(/ \d{4}$/, ''))} · Day ${s.day}</small></span>
+    ${s.today.strike ? '<span class="alert">🚐 Strike</span>' : ''}${s.today.flood ? '<span class="alert">🌧 Floods</span>' : ''}`;
+  $('#wallet').innerHTML = `<span class="coin" aria-hidden="true">₣</span><span><b>${n(s.cash)}</b>${s.bank ? `<small>Bank ${n(s.bank)}</small>` : ''}</span>`;
+  $('#meters').innerHTML = `${gauge('⚡', s.energy, 'Energy')}${gauge('❤️', s.health, 'Health')}${gauge('😊', s.happiness, 'Vibes')}${gauge('⭐', s.clout, 'Clout')}`;
   $('#meters').setAttribute('aria-label', `Energy ${s.energy}, health ${s.health}, vibes ${s.happiness}, clout ${s.clout}`);
+  $('.stage').dataset.time = timeOfDay(s.hour);
 }
 
 function renderTabs() {
@@ -162,7 +222,8 @@ function renderStage() {
   const msg = $('#stage-msg');
   msg.hidden = true;
   if (view === 'map') {
-    $('#place').textContent = 'Tap a commune to travel';
+    $('#place').innerHTML = '<b>🗺️ Abidjan</b><small>Tap a commune to travel there</small>';
+    $('#hint').hidden = true;
     return;
   }
   if (view === 'home' && !atHome) {
@@ -173,7 +234,12 @@ function renderStage() {
       : '<p>You have no home right now. Find a housing agent on the street and save up for the move-in fee.</p>';
     $('#go-home')?.addEventListener('click', () => openTravel(h.area));
   }
-  $('#place').textContent = view === 'home' ? `${h ? h.name : 'No home'} · ${AREAS[h?.area ?? s.area].name}` : `${AREAS[s.area].name} · ${AREAS[s.area].blurb}`;
+  $('#place').innerHTML = view === 'home'
+    ? `<b>🏠 ${esc(h ? h.name : 'No home')}</b><small>${esc(AREAS[h?.area ?? s.area].name)}</small>`
+    : `<b>📍 ${esc(AREAS[s.area].name)}</b><small>${esc(AREAS[s.area].blurb)}</small>`;
+  $('#hint').hidden = !(s.day <= 3 && msg.hidden);
+  $('#hint').textContent = view === 'home' ? 'Tap the floor to walk · tap your things to use them' : 'Tap the ground to walk · tap a person to talk';
+  stage?.setTime?.(s.hour);
   if (stage) {
     $('#stage3d').hidden = !msg.hidden;
     $('#stage2d').hidden = true;
@@ -229,25 +295,29 @@ function renderMap() {
 
 const GROUPS = { work: 'Hustle', home: 'At home', life: 'Enjoy life', learn: 'Learn', money: 'Money & places', do: 'Other' };
 
+const GROUP_ICON = { work: '💼', home: '🏠', life: '🎉', learn: '📚', money: '💰', do: '✨' };
+let doTab = null;
+
 function openDo() {
   const list = G.actions(s);
   const here = G.peopleHere(s);
-  const html = Object.entries(GROUPS).map(([g, title]) => {
-    const items = list.filter((a) => a.group === g);
-    if (!items.length) return '';
-    return `<div class="group-title">${title}</div>` + items.map((a) => `
-      <button class="action" type="button" data-act="${a.id}" ${a.blocked ? 'disabled' : ''}>
-        <strong>${esc(a.label)}</strong>
-        <small>${esc(a.desc)}</small>
-        ${a.blocked ? `<small class="why"> · ${esc(a.blocked)}</small>` : ''}
-      </button>`).join('');
+  const groups = Object.keys(GROUPS).filter((g) => list.some((a) => a.group === g));
+  if (!groups.includes(doTab)) doTab = groups.find((g) => list.some((a) => a.group === g && !a.blocked)) ?? groups[0];
+  const tabs = groups.map((g) => {
+    const open = list.filter((a) => a.group === g && !a.blocked).length;
+    return `<button class="seg ${g === doTab ? 'on' : ''}" data-seg="${g}" aria-pressed="${g === doTab}">${GROUP_ICON[g]} ${GROUPS[g]}<span class="seg-n">${open}</span></button>`;
   }).join('');
-  const people = here.length ? `<div class="group-title">People here</div><div class="people">${here.map((p) => `
-      <button class="person" type="button" data-person="${p.id}">${avatarSvg(p.look, { width: 30, label: p.name })}
+  const people = here.length ? `<div class="who-row">${here.map((p) => `
+      <button class="who-chip" type="button" data-person="${p.id}">${avatarSvg(p.look, { width: 26, label: p.name })}
         <span><strong>${esc(p.name)}</strong><small>${esc(p.level)}</small></span></button>`).join('')}</div>` : '';
-  showModal(`What now in ${AREAS[s.area].name}?`, `
-    <button class="sleep-btn" data-sleep>🛏 ${G.canSleepAtHome(s) ? 'Sleep at home (end the day)' : 'Sleep rough here (risky)'}</button>
-    ${people}${html}`);
+  const atHome = G.canSleepAtHome(s);
+  showModal(`In ${AREAS[s.area].name}`, `
+    ${people}
+    <div class="segs" role="group" aria-label="Kinds of things to do">${tabs}</div>
+    <div class="card-grid">${list.filter((a) => a.group === doTab).map((a) => actCard(a)).join('')}</div>
+    <button class="sleep-card ${atHome ? '' : 'risky'}" data-sleep><span aria-hidden="true">🌙</span>
+      <span><strong>${atHome ? 'Sleep at home' : 'Sleep rough here'}</strong><small>${atHome ? 'End the day and get your energy back' : 'Risky: you could get robbed'}</small></span></button>`);
+  wire('[data-seg]', (b) => { doTab = b.dataset.seg; openDo(); });
   wire('[data-act]', (b) => {
     modal.close();
     const panel = G.act(s, b.dataset.act);
@@ -274,8 +344,7 @@ function openPerson(id) {
       </div>
     </div>
     <p class="sub">${rel >= 45 ? '✅' : '🔒'} Friend perk: ${esc(p.perkText)}${rel >= 45 ? '' : ' (unlocks at 45)'}.</p>
-    <div class="social">${opts.map((o) => `<button data-social="${o.id}" ${o.blocked ? 'disabled' : ''}>
-      <strong>${esc(o.label)}</strong>${o.blocked ? `<small>${esc(o.blocked)}</small>` : ''}</button>`).join('')}</div>`);
+    <div class="card-grid">${opts.map((o) => actCard({ ...o, desc: '' }, 'data-social')).join('')}</div>`);
   wire('[data-social]', (el) => { G.socialize(s, id, el.dataset.social); refresh(() => openPerson(id)); });
 }
 
@@ -449,9 +518,8 @@ function openObject(id) {
     : list.find((x) => x.id === a))).filter(Boolean);
   const info = o.need ? FURNITURE[o.need].blurb : id === 'bed' && !G.owns(s, 'mattress') ? 'A thin mat on the floor. A foam mattress would help.' : '';
   showModal(o.label, `${info ? `<p class="sub">${esc(info)}</p>` : ''}
-    <div class="stack">${acts.length ? acts.map((a) => `<button class="action" data-do="${a.id}" ${a.blocked ? 'disabled' : ''}>
-      <strong>${esc(a.label)}</strong><small>${esc(a.desc)}</small>${a.blocked ? `<small class="why"> · ${esc(a.blocked)}</small>` : ''}</button>`).join('')
-      : '<p class="sub">Nothing to do here, but it is working hard for you.</p>'}</div>`);
+    ${acts.length ? `<div class="card-grid">${acts.map((a) => actCard(a, 'data-do')).join('')}</div>`
+      : '<p class="sub">Nothing to do here, but it is working hard for you.</p>'}`);
   wire('[data-do]', (el) => {
     const act = el.dataset.do;
     modal.close();
@@ -534,16 +602,10 @@ function openTravel(to) {
   if (to === s.area) return;
   const opts = G.travelOptions(s, to);
   const km = G.distanceKm(s.area, to).toFixed(1);
-  const rows = opts.map((o) => `
-    <div class="row">
-      <div><strong>${esc(o.name)}</strong>
-        <div class="meta">${o.hours}h · ${o.cost ? n(o.cost) : 'free'} · -${o.energy} energy</div>
-        <div class="meta">${esc(o.note)}</div>
-        ${o.blocked ? `<div class="why">${esc(o.blocked)}</div>` : ''}
-      </div>
-      <div class="btns"><button class="primary" data-mode="${o.id}" ${o.blocked ? 'disabled' : ''}>Go</button></div>
-    </div>`).join('');
-  showModal(`Travel to ${AREAS[to].name}`, `<p class="sub">${km} km from ${esc(AREAS[s.area].name)}. Rush hours (07h–10h and 16h–20h) are slow.</p>${rows}`);
+  const rows = opts.map((o) => actCard({ id: o.id, label: o.name, blocked: o.blocked,
+    note: o.note, desc: [`${o.hours}h`, o.cost ? n(o.cost) : 'free', `-${o.energy} energy`].join(' · ') }, 'data-mode', VEHICLE[o.id])).join('');
+  showModal(`Travel to ${AREAS[to].name}`, `<p class="sub">📍 ${km} km from ${esc(AREAS[s.area].name)}. Rush hours (07h–10h and 16h–20h) are slow.</p>
+    <div class="card-grid">${rows}</div>`);
   wire('[data-mode]', (el) => {
     if (G.travel(s, to, el.dataset.mode)) { scenePos.street = { x: 30, y: 120 }; view = 'street'; render(); showStreet(el.dataset.mode, to); }
   });
@@ -836,6 +898,7 @@ for (const b of document.querySelectorAll('[data-tab]')) {
 $('#btn-do').addEventListener('click', openDo);
 $('#btn-phone').addEventListener('click', () => openPhone());
 $('#me').addEventListener('click', openLife);
+$('#wallet').addEventListener('click', openLife);
 $('#btn-help').addEventListener('click', openHelp);
 
 // ---------- new life setup ----------

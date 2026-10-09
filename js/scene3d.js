@@ -380,6 +380,8 @@ export function createStage(container, handlers) {
   let fit = { w: 14, h: 11 };
   let tags = [];
   let props = [];
+  let lights = null;
+  let hour = 12;
   const bubble = document.createElement('div');
   bubble.className = 'stage-bubble';
   bubble.hidden = true;
@@ -402,13 +404,16 @@ export function createStage(container, handlers) {
 
   function baseScene(groundColors, size) {
     scene = new THREE.Scene();
-    scene.add(new THREE.HemisphereLight('#ffffff', '#8f7d60', 0.6));
+    const sky = new THREE.HemisphereLight('#ffffff', '#8f7d60', 0.6);
+    scene.add(sky);
     const sun = new THREE.DirectionalLight('#fff1d6', 0.65);
+    lights = { sky, sun };
     sun.position.set(6, 12, 8);
     sun.castShadow = true;
     sun.shadow.mapSize.set(1024, 1024);
     Object.assign(sun.shadow.camera, { left: -10, right: 10, top: 10, bottom: -10 });
     scene.add(sun);
+    applyTime();
     floor = new THREE.Mesh(new THREE.PlaneGeometry(size[0], size[1]),
       new THREE.MeshLambertMaterial({ map: checkerTexture(groundColors[0], groundColors[1], [size[0] / 2, size[1] / 2]) }));
     floor.rotation.x = -Math.PI / 2;
@@ -510,6 +515,29 @@ export function createStage(container, handlers) {
 
   function clear() {
     key = '';
+  }
+
+  // Light follows the clock: warm mornings, bright days, orange evenings and blue nights.
+  const TIMES = [
+    [6, '#ffe6c4', '#8f7d60', 0.62, '#ffd3a0', 0.62, [-4, 10, 9]],
+    [9, '#ffffff', '#8f7d60', 0.62, '#fff1d6', 0.68, [6, 12, 8]],
+    [17, '#ffe2bf', '#8a6a4a', 0.55, '#ffb070', 0.6, [10, 5, 4]],
+    [19.5, '#7d8fc7', '#2b2f45', 0.38, '#9fb4ff', 0.28, [4, 10, 6]],
+  ];
+  function applyTime() {
+    if (!lights) return;
+    const [, skyC, groundC, skyI, sunC, sunI, pos] = [...TIMES].reverse().find(([h]) => hour >= h) ?? TIMES[0];
+    lights.sky.color.set(skyC);
+    lights.sky.groundColor.set(groundC);
+    lights.sky.intensity = skyI;
+    lights.sun.color.set(sunC);
+    lights.sun.intensity = sunI;
+    lights.sun.position.set(...pos);
+  }
+  function setTime(h) {
+    if (h === hour) return;
+    hour = h;
+    applyTime();
   }
 
   // ----- movement and poses -----
@@ -679,5 +707,5 @@ export function createStage(container, handlers) {
   requestAnimationFrame(tick);
   new ResizeObserver(resize).observe(container);
 
-  return { showHome, showStreet, clear, walkTo, perform, resize };
+  return { showHome, showStreet, clear, walkTo, perform, resize, setTime };
 }
