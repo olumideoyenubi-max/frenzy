@@ -1,0 +1,12 @@
+{
+  "name": "lagos-frenzy",
+  "version": "1.0.0",
+  "description": "A Lagos life-sim browser game: hustle from Ajegunle to Banana Island.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "engines": { "node": ">=18" }
+}

@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lagos Frenzy</title>
+  <meta name="description" content="A Lagos life-sim: hustle from a face-me-I-face-you in Ajegunle to a duplex on Banana Island.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚌</text></svg>">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">🚌</span>
+      <div>
+        <h1>Lagos Frenzy</h1>
+        <p class="tagline">From Ajegunle to Banana Island</p>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <button class="ghost" id="btn-help" type="button">How to play</button>
+      <button class="ghost" id="btn-new" type="button">New game</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="panel hud" id="hud" aria-label="Your status"></section>
+
+    <section class="panel map-panel" aria-label="Map of Lagos">
+      <div class="panel-head">
+        <h2>Map</h2>
+        <span class="hint">Tap an area to travel</span>
+      </div>
+      <svg id="map" viewBox="0 0 640 400" role="group" aria-label="Lagos areas"></svg>
+    </section>
+
+    <section class="panel actions-panel" aria-label="What you can do here">
+      <div class="panel-head">
+        <h2 id="here-title">Here</h2>
+        <button class="sleep" id="btn-sleep" type="button">Sleep</button>
+      </div>
+      <p class="blurb" id="here-blurb"></p>
+      <div id="actions"></div>
+    </section>
+
+    <section class="panel side" aria-label="Goals and news">
+      <div class="panel-head"><h2>Goals</h2></div>
+      <ol class="goals" id="goals"></ol>
+      <div class="panel-head"><h2>Gist</h2></div>
+      <ul class="log" id="log" aria-live="polite"></ul>
+    </section>
+  </main>
+
+  <dialog id="modal">
+    <form method="dialog" class="modal-inner">
+      <div class="modal-head">
+        <h2 id="modal-title"></h2>
+        <button class="icon" value="close" aria-label="Close" id="modal-x">✕</button>
+      </div>
+      <div id="modal-body"></div>
+    </form>
+  </dialog>
+
+  <script type="module" src="js/ui.js"></script>
+</body>
+</html>
