@@ -1,9 +1,9 @@
 // DOM rendering and input. All game rules live in engine.js.
 
-import { AREAS, ROADS, GOODS, MARKETS, JOBS, HOUSES } from './data.js';
+import { AREAS, ROADS, GOODS, MARKETS, JOBS, HOUSES, MOVE_IN_MONTHS, JAPA } from './data.js';
 import * as G from './engine.js';
 
-const SAVE_KEY = 'lagos-frenzy-save-v1';
+const SAVE_KEY = 'babi-frenzy-save-v1';
 const $ = (sel) => document.querySelector(sel);
 const modal = $('#modal');
 let s = load() ?? G.newGame();
@@ -26,7 +26,7 @@ function esc(text) {
   return String(text).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-const n = G.naira;
+const n = G.cfa;
 
 // ---------- main render ----------
 
@@ -57,8 +57,8 @@ function renderHud() {
       <h3>Day ${s.day}</h3>
       <div class="big">${G.clock(s.hour)}</div>
       <div class="sub">${G.dateLabel(s.day)} · in ${esc(AREAS[s.area].name)}</div>
-      ${s.today.fuelScarcity ? '<div class="warn">⛽ Fuel scarcity today</div>' : ''}
-      ${s.today.flood ? '<div class="warn">🌧 Flooding on the Island side</div>' : ''}
+      ${s.today.strike ? '<div class="warn">🚐 Transport strike today</div>' : ''}
+      ${s.today.flood ? '<div class="warn">🌧 Flooding in Cocody, Abobo and Yopougon</div>' : ''}
     </div>
     <div class="hud-block">
       <h3>Money</h3>
@@ -94,7 +94,7 @@ function renderMap() {
   const roads = ROADS.map(([a, b]) => `<line class="road" x1="${AREAS[a].x}" y1="${AREAS[a].y}" x2="${AREAS[b].x}" y2="${AREAS[b].y}"/>`).join('');
   const areas = Object.entries(AREAS).map(([id, a]) => {
     const cls = ['area', id === s.area ? 'here' : '', id === homeArea ? 'home' : ''].join(' ');
-    const labelBelow = a.y < 120 || id === 'banana';
+    const labelBelow = a.y < 120 || ['adjame', 'portbouet'].includes(id);
     const ty = labelBelow ? a.y + 28 : a.y - 18;
     return `<g class="${cls}" data-area="${id}" tabindex="0" role="button" aria-label="Travel to ${esc(a.name)}${id === s.area ? ' (you are here)' : ''}">
       <circle cx="${a.x}" cy="${a.y}" r="11"/>
@@ -103,13 +103,11 @@ function renderMap() {
     </g>`;
   }).join('');
   $('#map').innerHTML = `
-    <path class="land" d="M0 0 H640 V215 C600 225 560 260 470 262 C430 240 420 232 360 236 C330 245 300 248 270 262 C220 250 180 250 140 236 C90 226 40 236 0 230 Z"/>
-    <path class="land" d="M250 285 C270 272 320 270 345 282 C352 300 330 312 300 314 C270 314 250 304 250 285 Z"/>
-    <path class="land" d="M355 290 C400 280 470 290 640 280 V345 C520 350 420 352 340 345 C335 320 340 300 355 290 Z"/>
-    <path class="land" d="M362 244 C390 236 420 240 440 252 C438 268 410 276 380 274 C365 268 358 256 362 244 Z"/>
-    <path class="land" d="M0 250 C40 250 90 245 140 255 C170 262 200 270 230 275 C220 300 150 300 0 300 Z"/>
-    <text class="map-label" x="470" y="200">Lagos Lagoon</text>
-    <text class="map-label" x="250" y="385">Atlantic Ocean</text>
+    <path class="land" d="M0 0 H640 V222 C590 232 540 228 470 222 C430 218 380 212 350 222 C340 245 305 250 282 236 C262 214 232 212 200 214 C150 218 100 206 0 208 Z"/>
+    <path class="land" d="M222 262 C250 250 300 252 360 258 C420 252 480 254 530 262 C542 288 522 314 470 318 C400 322 300 322 240 312 C220 300 214 280 222 262 Z"/>
+    <path class="land" d="M110 338 C250 330 450 332 640 334 V372 C450 370 250 372 110 372 C100 360 100 345 110 338 Z"/>
+    <text class="map-label" x="70" y="246">Ébrié Lagoon</text>
+    <text class="map-label" x="250" y="392">Atlantic Ocean</text>
     ${roads}${areas}`;
   for (const g of document.querySelectorAll('.area')) {
     const go = () => openTravel(g.dataset.area);
@@ -190,7 +188,7 @@ function openTravel(to) {
       </div>
       <div class="btns"><button class="primary" data-mode="${o.id}" ${o.blocked ? 'disabled' : ''}>Go</button></div>
     </div>`).join('');
-  showModal(`Travel to ${AREAS[to].name}`, `<p class="sub">${km} km from ${esc(AREAS[s.area].name)}. Rush hours (7–10am, 4–8pm) are slow.</p>${rows}`);
+  showModal(`Travel to ${AREAS[to].name}`, `<p class="sub">${km} km from ${esc(AREAS[s.area].name)}. Rush hours (07h–10h and 16h–20h) are slow.</p>${rows}`);
   wire('[data-mode]', (el) => {
     if (G.travel(s, to, el.dataset.mode)) { modal.close(); render(); }
   });
@@ -225,7 +223,7 @@ function openMarket() {
       </div>
     </div>`;
   }).join('');
-  showModal(MARKETS[s.area], `<p class="sub">Cash ${n(s.cash)} · carrying ${G.carried(s)}/${G.capacity(s)}. Prices change every day and differ across Lagos. Your trade skill gets you better prices.</p>${rows}`);
+  showModal(MARKETS[s.area], `<p class="sub">Cash ${n(s.cash)} · carrying ${G.carried(s)}/${G.capacity(s)}. Prices change every day and differ across Abidjan. Your trade skill gets you better prices.</p>${rows}`);
   wire('[data-buy]', (el) => { G.buy(s, el.dataset.buy, +el.dataset.q); refresh(openMarket); });
   wire('[data-sell]', (el) => { G.sell(s, el.dataset.sell, +el.dataset.q); refresh(openMarket); });
 }
@@ -259,7 +257,7 @@ function openShop() {
         ${it.blocked ? `<div class="why">${esc(it.blocked)}</div>` : ''}</div>
       <div class="btns"><button class="primary" data-item="${it.id}" ${it.blocked ? 'disabled' : ''}>Buy</button></div>
     </div>`).join('');
-  showModal('Computer Village & car lot', `<p class="sub">Cash ${n(s.cash)}. Imported prices follow the exchange rate.</p>${rows}`);
+  showModal('Black Market & car lot', `<p class="sub">Cash ${n(s.cash)}. Imported goods follow the dollar.</p>${rows}`);
   wire('[data-item]', (el) => { G.buyItem(s, el.dataset.item); refresh(openShop); });
 }
 
@@ -267,20 +265,20 @@ function openAgent() {
   const rows = G.housesHere(s).map((h) => `
     <div class="row">
       <div><strong>${esc(h.name)}</strong>
-        <div class="meta">${n(h.yearly)} a year · move-in total ${n(h.cost)} (rent + 15% agent & legal)</div>
-        <div class="meta">Sleep +${h.sleep} energy · ${h.power === 0 ? '24-hour light' : `NEPA takes light ${Math.round(h.power * 100)}% of nights`}</div>
+        <div class="meta">${n(h.monthly)} a month · move-in total ${n(h.cost)} (2 months' advance, 2 months' deposit, 1 month agency fee)</div>
+        <div class="meta">Sleep +${h.sleep} energy · ${h.power === 0 ? 'Power never goes off' : `Power cuts on ${Math.round(h.power * 100)}% of nights`}</div>
         ${h.blocked ? `<div class="why">${esc(h.blocked)}</div>` : ''}
       </div>
       <div class="btns"><button class="primary" data-house="${h.id}" ${h.blocked ? 'disabled' : ''}>Rent it</button></div>
     </div>`).join('');
-  const others = Object.values(HOUSES).filter((h) => h.area !== s.area).map((h) => `${h.name} (${AREAS[h.area].name}, ${n(h.yearly)}/yr)`);
-  showModal('House agent', `<p class="sub">"Na one year upfront, plus agreement and agency." Cash ${n(s.cash)}.</p>${rows}
-    <p class="sub">Other places in Lagos: ${others.map(esc).join(' · ')}</p>`);
+  const others = Object.values(HOUSES).filter((h) => h.area !== s.area).map((h) => `${h.name} (${AREAS[h.area].name}, ${n(h.monthly)}/month)`);
+  showModal('Housing agent', `<p class="sub">"It's ${MOVE_IN_MONTHS} months to move in, my friend: advance, deposit and my fee." Cash ${n(s.cash)}.</p>${rows}
+    <p class="sub">Other places in Abidjan: ${others.map(esc).join(' · ')}</p>`);
   wire('[data-house]', (el) => { G.moveHouse(s, el.dataset.house); refresh(openAgent); });
 }
 
 function moneyForm(prefix) {
-  return `<div class="money-input"><input type="number" min="0" step="1000" inputmode="numeric" id="${prefix}-amt" placeholder="Amount in ₦">`;
+  return `<div class="money-input"><input type="number" min="0" step="1000" inputmode="numeric" id="${prefix}-amt" placeholder="Amount in FCFA">`;
 }
 
 function openBank() {
@@ -299,7 +297,7 @@ function openBank() {
 }
 
 function openPhone() {
-  showModal('LagosCoin', `
+  showModal('BabiCoin', `
     <p>1 coin = <strong>${n(s.cryptoPrice)}</strong></p>
     <p>You hold ${s.crypto.toFixed(3)} coins, worth <strong>${n(G.cryptoValue(s))}</strong>. Cash ${n(s.cash)}.</p>
     <p class="sub">The price moves every night. It can fly, and it can crash. Don't put your rent money in.</p>
@@ -311,7 +309,7 @@ function openPhone() {
 
 function openEvent() {
   const opts = G.eventOptions(s);
-  showModal('Wetin happen?', `<p class="event-text">${esc(s.pendingEvent.text)}</p>
+  showModal('What\'s going on?', `<p class="event-text">${esc(s.pendingEvent.text)}</p>
     <div class="stack">${opts.map((o, i) => `<button class="${i === 0 ? 'primary' : ''}" data-ev="${i}" ${o.blocked ? 'disabled' : ''}>${esc(o.label)}${o.blocked ? ` (${esc(o.blocked)})` : ''}</button>`).join('')}</div>`,
   { closable: false });
   wire('[data-ev]', (el) => {
@@ -321,42 +319,42 @@ function openEvent() {
 
 function openEnding() {
   const e = s.ending;
-  const emoji = { win: '🏝️', japa: '✈️', hospital: '🏥' }[e.kind];
+  const emoji = { win: '🏡', japa: '✈️', hospital: '🏥' }[e.kind];
   showModal('Game over', `<div class="ending">
     <div class="emoji">${emoji}</div>
     <h2 style="text-transform:none;letter-spacing:0;font-size:1.4rem;margin:.4rem 0">${esc(e.title)}</h2>
     <p>${esc(e.text)}</p>
-    <p class="sub">Days in Lagos: ${s.day} · Best net worth: ${n(s.stats.maxNetWorth)} · Shifts worked: ${s.stats.shifts} · Viral skits: ${s.stats.viral}</p>
+    <p class="sub">Days in Babi: ${s.day} · Best net worth: ${n(s.stats.maxNetWorth)} · Shifts worked: ${s.stats.shifts} · Viral skits: ${s.stats.viral}</p>
     <button class="primary" data-again>Play again</button></div>`, { closable: false });
   wire('[data-again]', () => { s = G.newGame(); modal.close(); render(); });
 }
 
 function openHelp() {
   showModal('How to play', `<div class="help">
-    <p>You arrive in Lagos with ₦50,000 and a face-me-I-face-you room in Ajegunle. Your goal: <strong>a duplex on Banana Island</strong>. Or save enough to <strong>japa</strong> from the embassy in VI.</p>
+    <p>You arrive in Abidjan, Babi, with ${n(25000)} and a room in a cour commune in Yopougon. Your goal: <strong>a villa in Riviera Golf</strong>. Or save up and <strong>move abroad</strong> from the embassy in Plateau.</p>
     <h3>Each day</h3>
     <ul>
-      <li>Every action takes time. The day runs from 6am to midnight.</li>
-      <li><strong>Eat</strong> every day or your health drops. Sleep at <strong>home</strong> to restore energy. Sleeping rough is risky.</li>
-      <li>Travel by danfo, BRT, okada, ride-hailing or your own car. Rush hours (7–10am, 4–8pm) are slow.</li>
+      <li>Every action takes time. The day runs from 06h00 to midnight.</li>
+      <li><strong>Eat</strong> every day or your health drops. Sleep at <strong>home</strong> to get your energy back. Sleeping rough is risky.</li>
+      <li>Get around by gbaka, water bus, woro-woro, moto-taxi, taxi or your own car. Rush hours (07h–10h and 16h–20h) are slow.</li>
     </ul>
     <h3>Make money</h3>
     <ul>
-      <li>Hawk pure water, take jobs, shoot skits, audition in Surulere.</li>
-      <li>Trade: buy goods where they're cheap (pepper in Ikorodu, Ankara at Balogun, iPhones in Ikeja) and sell where they're dear (Lekki, VI).</li>
-      <li>Learn tech in Yaba, haggling at Balogun and charm at VI mixers to unlock better jobs.</li>
+      <li>Sell water sachets in traffic, take jobs, shoot skits, audition for music videos in Treichville.</li>
+      <li>Trade: buy where things are cheap (plantain in Bingerville, attiéké in Yopougon, pagne and iPhones in Adjamé) and sell where they're dear (Cocody, Zone 4).</li>
+      <li>Learn tech in Cocody, haggling in Adjamé and charm at networking events in Plateau and Zone 4 to unlock better jobs.</li>
     </ul>
     <h3>Watch out</h3>
     <ul>
-      <li>Rent is paid a year at a time. If it runs out, you get 7 days before eviction.</li>
-      <li>NEPA takes light. A generator helps you sleep. Keep savings in the bank, away from pickpockets.</li>
-      <li>If your health hits zero, it's game over.</li>
+      <li>Rent is due every month, and moving in costs ${MOVE_IN_MONTHS} months up front. Miss the rent by more than 7 days and you're out.</li>
+      <li>CIE sometimes cuts the power. A generator helps you sleep. Keep your savings in the bank, away from pickpockets.</li>
+      <li>If your health hits zero, it's game over. Moving abroad needs ${n(JAPA.proofOfFunds)} in proof of funds.</li>
     </ul>
     <p class="sub">Your game saves automatically in this browser.</p></div>`);
 }
 
 $('#btn-sleep').addEventListener('click', () => {
-  if (!G.canSleepAtHome(s) && !confirm(s.home ? 'You are not at home. Sleep rough here? You may get robbed.' : 'You are homeless. Sleep under the bridge?')) return;
+  if (!G.canSleepAtHome(s) && !confirm(s.home ? 'You are not at home. Sleep rough here? You may get robbed.' : 'You are homeless. Sleep on a bench?')) return;
   G.sleep(s);
   render();
 });

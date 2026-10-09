@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as G from '../js/engine.js';
+import { AREAS } from '../js/data.js';
 
 function fresh(seed = 42) {
   const s = G.newGame(seed);
@@ -8,11 +9,11 @@ function fresh(seed = 42) {
   return s;
 }
 
-test('new game starts in Ajegunle with ₦50,000', () => {
+test('new game starts in Yopougon with 25,000 FCFA', () => {
   const s = fresh();
-  assert.equal(s.area, 'ajegunle');
-  assert.equal(s.cash, 50000);
-  assert.equal(s.home.id, 'facemi');
+  assert.equal(s.area, 'yopougon');
+  assert.equal(s.cash, 25000);
+  assert.equal(s.home.id, 'cour');
   assert.equal(s.day, 1);
 });
 
@@ -24,21 +25,22 @@ test('same seed replays the same game', () => {
 
 test('travel costs money and time, and moves you', () => {
   const s = fresh();
-  const opt = G.travelOptions(s, 'oshodi').find((o) => o.id === 'danfo');
+  const opt = G.travelOptions(s, 'adjame').find((o) => o.id === 'gbaka');
   assert.equal(opt.blocked, null);
   const cashBefore = s.cash;
-  assert.ok(G.travel(s, 'oshodi', 'danfo'));
-  assert.equal(s.area, 'oshodi');
+  assert.ok(G.travel(s, 'adjame', 'gbaka'));
+  assert.equal(s.area, 'adjame');
   assert.ok(s.cash <= cashBefore - opt.cost);
   assert.equal(s.hour, 6 + opt.hours);
 });
 
-test('okada is banned on the Island and you need a car to drive', () => {
+test('moto-taxis are banned in Plateau, the water bus only serves lagoon stops, cars need owning', () => {
   const s = fresh();
-  const opts = G.travelOptions(s, 'vi');
-  assert.equal(opts.find((o) => o.id === 'okada').blocked, 'Okada is banned there');
+  const opts = G.travelOptions(s, 'plateau');
+  assert.equal(opts.find((o) => o.id === 'moto').blocked, 'Moto-taxis are not allowed there');
   assert.equal(opts.find((o) => o.id === 'car').blocked, 'You do not own a car');
-  assert.equal(opts.find((o) => o.id === 'brt').blocked, 'Not on the BRT route');
+  assert.equal(opts.find((o) => o.id === 'boat').blocked, null);
+  assert.equal(G.travelOptions(s, 'abobo').find((o) => o.id === 'boat').blocked, 'No water bus on this route');
 });
 
 test('eating marks the day as fed and costs cash', () => {
@@ -59,7 +61,7 @@ test('skipping food hurts health overnight', () => {
 
 test('job requirements are enforced', () => {
   const s = fresh();
-  s.area = 'yaba';
+  s.area = 'cocody';
   const dev = G.jobsHere(s).find((j) => j.id === 'dev');
   assert.match(dev.blocked, /tech/);
   s.skills.tech = 50;
@@ -70,33 +72,33 @@ test('job requirements are enforced', () => {
 
 test('working a shift pays once a day', () => {
   const s = fresh();
-  s.area = 'oshodi';
-  G.takeJob(s, 'conductor');
+  s.area = 'abobo';
+  G.takeJob(s, 'apprenti');
   const before = s.cash;
   G.act(s, 'work');
-  assert.equal(s.cash, before + 10000);
+  assert.equal(s.cash, before + 5000);
   const again = G.actions(s).find((a) => a.id === 'work');
   assert.ok(again.blocked);
 });
 
 test('buying and selling goods tracks inventory and capacity', () => {
   const s = fresh();
-  s.area = 'ikorodu';
+  s.area = 'bingerville';
   s.cash = 1_000_000;
-  assert.ok(G.buy(s, 'pepper', 999));
+  assert.ok(G.buy(s, 'plantain', 999));
   assert.equal(G.carried(s), 10);
-  assert.equal(G.buy(s, 'pepper', 1), false);
-  s.area = 'vi';
-  assert.ok(G.sell(s, 'pepper', 999));
+  assert.equal(G.buy(s, 'plantain', 1), false);
+  s.area = 'marcory';
+  assert.ok(G.sell(s, 'plantain', 999));
   assert.equal(G.carried(s), 0);
-  assert.ok(s.cash > 1_000_000, 'pepper from Ikorodu should sell for a profit in VI');
+  assert.ok(s.cash > 1_000_000, 'plantain from Bingerville should sell for a profit in Zone 4');
 });
 
 test('bank deposits are capped by cash', () => {
   const s = fresh();
   G.deposit(s, 1e9);
   assert.equal(s.cash, 0);
-  assert.equal(s.bank, 50000);
+  assert.equal(s.bank, 25000);
   G.withdraw(s, 20000);
   assert.equal(s.cash, 20000);
 });
@@ -112,13 +114,25 @@ test('unpaid rent leads to eviction after the grace week', () => {
   assert.equal(s.home, null);
 });
 
-test('moving into Banana Island wins the game', () => {
+test('moving into a Riviera Golf villa wins the game', () => {
   const s = fresh();
-  s.area = 'banana';
+  s.area = 'riviera';
   s.cash = 100_000_000;
-  assert.ok(G.moveHouse(s, 'banana'));
+  assert.ok(G.moveHouse(s, 'villa'));
   assert.equal(s.ending.kind, 'win');
-  assert.equal(s.goals.banana, true);
+  assert.equal(s.goals.villa, true);
+  assert.equal(s.cash, 100_000_000 - 5 * 3_000_000);
+});
+
+test('paying rent covers another 30 days', () => {
+  const s = fresh();
+  G.act(s, 'rent');
+  assert.equal(s.home.paidUntil, 60);
+  assert.equal(s.cash, 0);
+});
+
+test('money is shown in CFA francs', () => {
+  assert.equal(G.cfa(1234567).replace(/\u202f/g, ' '), '1 234 567 FCFA');
 });
 
 test('health reaching zero ends the game', () => {
@@ -131,7 +145,7 @@ test('health reaching zero ends the game', () => {
 test('every action listed on every area can be checked without errors', () => {
   const s = fresh();
   s.items = { smartphone: true, laptop: true, generator: true, car: true };
-  for (const area of ['ikorodu', 'ikeja', 'oshodi', 'yaba', 'surulere', 'ajegunle', 'island', 'banana', 'vi', 'lekki']) {
+  for (const area of Object.keys(AREAS)) {
     s.area = area;
     for (const hour of [6, 12, 20]) {
       s.hour = hour;
@@ -153,7 +167,7 @@ test('a long random playthrough never breaks the state', () => {
     if (r < 0.15 || !acts.length) {
       G.sleep(s);
     } else if (r < 0.35) {
-      const areas = ['ikorodu', 'ikeja', 'oshodi', 'yaba', 'surulere', 'ajegunle', 'island', 'banana', 'vi', 'lekki'];
+      const areas = Object.keys(AREAS);
       const to = areas[Math.floor(G.rand(s) * areas.length)];
       const opt = G.travelOptions(s, to).find((o) => !o.blocked);
       if (opt) G.travel(s, to, opt.id);

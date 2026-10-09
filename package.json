@@ -1,7 +1,7 @@
 {
-  "name": "lagos-frenzy",
+  "name": "babi-frenzy",
   "version": "1.0.0",
-  "description": "A Lagos life-sim browser game: hustle from Ajegunle to Banana Island.",
+  "description": "An Abidjan life-sim browser game: hustle from Yopougon to Riviera Golf.",
   "type": "module",
   "private": true,
   "scripts": {
