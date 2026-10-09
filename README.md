@@ -3,6 +3,16 @@
 A life-sim browser game set in Abidjan, Côte d'Ivoire. You arrive in Babi with 25,000 FCFA and a room in a
 cour commune in Yopougon. Hustle, trade, learn and party your way to **a villa in Riviera Golf**, or save enough to **move abroad**.
 
+## Look and feel
+
+The game fills the screen like a mobile game. A 3D isometric scene sits in the middle (your room, or the street of the
+commune you're in), with a floating status bar, your meters, pop-up news and a bottom tab bar: Home, Street, Map, Do and Phone.
+Tap your name for your stats, goals and news.
+
+The 3D scenes use [three.js](https://threejs.org) r128 from cdnjs. Your low-poly character wears the wax print you picked,
+walks with swinging arms and legs, lies on the bed, sits on the plastic chair and dances. If WebGL or the CDN isn't
+available, the game falls back to flat 2D scenes.
+
 ## Start a new life
 
 Every game starts with a short setup, inspired by Lagos Life:
@@ -66,7 +76,8 @@ The game saves automatically in your browser.
 | --- | --- |
 | `js/data.js` | Communes, transport, jobs, goods, housing and items |
 | `js/engine.js` | All game rules. Pure functions with no DOM and a seeded RNG |
-| `js/ui.js` | Rendering, the SVG map and dialogs |
+| `js/ui.js` | Interface, the SVG map, dialogs and the 2D fallback scenes |
+| `js/scene3d.js` | The three.js stage: characters, the room, the street, walking and poses |
 | `test/engine.test.js` | Rule tests plus a long random-play stress test |
 
 ```bash

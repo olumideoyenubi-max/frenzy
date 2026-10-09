@@ -5,6 +5,7 @@ import {
   TRAITS, DREAMS, BACKGROUNDS, STARTS, AVATAR, FURNITURE, PEOPLE, STREET_LINES,
 } from './data.js';
 import * as G from './engine.js';
+import { has3D, createStage } from './scene3d.js';
 
 const SAVE_KEY = 'babi-frenzy-save-v2';
 const $ = (sel) => document.querySelector(sel);
@@ -40,13 +41,17 @@ const n = G.cfa;
 
 // ---------- main render ----------
 
+// Which part of the game fills the screen: 'home', 'street' or 'map'.
+let view = G.canSleepAtHome(s) ? 'home' : 'street';
+let stage = null;
+let lastToast = null;
+
 function render() {
-  renderHud();
+  renderTop();
   renderMap();
-  renderActions();
-  renderHome();
-  renderGoals();
-  renderLog();
+  renderStage();
+  renderTabs();
+  showNewToasts();
   save();
   if (inSetup) return;
   if (s.ending) openEnding();
@@ -101,56 +106,98 @@ function bar(label, value, cls = '') {
   return `<div class="bar"><span>${label}</span><div class="bar-track"><div class="bar-fill ${cls}${low}" style="width:${value}%"></div></div><span>${Math.round(value)}</span></div>`;
 }
 
-function renderHud() {
+function renderTop() {
+  $('#me').innerHTML = `${avatarSvg(s.avatar, { width: 34, label: s.name })}
+    <span class="me-text"><strong>${esc(s.name)}</strong><small>${mood(s.happiness)}</small></span>`;
+  $('#status').innerHTML = `
+    <span class="pill-part">🗓️ ${esc(G.dateLabel(s.day).replace(/ \d{4}$/, ''))} · <b>${G.clock(s.hour)}</b></span>
+    <span class="pill-part">📍 ${esc(AREAS[s.area].name)}</span>
+    <span class="pill-part money">${n(s.cash)}</span>
+    ${s.today.strike ? '<span class="pill-part warn">🚐 Strike</span>' : ''}${s.today.flood ? '<span class="pill-part warn">🌧 Floods</span>' : ''}`;
+  $('#meters').innerHTML = `${bar('⚡', s.energy)}${bar('❤️', s.health)}${bar('😊', s.happiness)}${bar('⭐', s.clout, 'clout')}`;
+  $('#meters').setAttribute('aria-label', `Energy ${s.energy}, health ${s.health}, vibes ${s.happiness}, clout ${s.clout}`);
+}
+
+function renderTabs() {
+  for (const b of document.querySelectorAll('[data-tab]')) b.classList.toggle('on', b.dataset.tab === view);
+  const unread = G.unreadCount(s);
+  $('#phone-badge').hidden = !unread;
+  $('#phone-badge').textContent = unread;
+}
+
+// ---------- toasts ----------
+
+const logKey = (l) => l && `${l.day}|${l.hour}|${l.text}`;
+
+function showNewToasts() {
+  if (inSetup) return;
+  const fresh = [];
+  for (const l of s.log) {
+    if (logKey(l) === lastToast) break;
+    fresh.push(l);
+    if (fresh.length === 3) break;
+  }
+  if (lastToast !== null) for (const l of fresh.reverse()) toast(l.text, l.tone);
+  lastToast = logKey(s.log[0]);
+}
+
+function toast(text, tone = 'info') {
+  const el = document.createElement('div');
+  el.className = `toast ${tone}`;
+  el.textContent = text;
+  $('#toasts').appendChild(el);
+  setTimeout(() => el.classList.add('out'), 4200);
+  setTimeout(() => el.remove(), 4700);
+  while ($('#toasts').children.length > 3) $('#toasts').firstChild.remove();
+}
+
+// ---------- the stage ----------
+
+const BASE_OBJECTS = ['bed', 'chair', 'bucket'];
+
+function renderStage() {
+  $('#map-view').hidden = view !== 'map';
   const h = G.house(s);
-  const rentLeft = s.home ? s.home.paidUntil - s.day : null;
-  const job = s.job ? JOBS[s.job] : null;
-  const owned = Object.entries(s.items).filter(([, v]) => v).map(([k]) => k);
-  const inv = Object.entries(s.inventory).map(([k, v]) => `${v.qty} × ${GOODS[k].name}`);
-  $('#hud').innerHTML = `
-    <div class="hud-block who">
-      ${avatarSvg(s.avatar, { width: 48, label: s.name })}
-      <div>
-        <div class="name">${esc(s.name)}</div>
-        <div class="sub">${mood(s.happiness)}</div>
-        <div class="sub">${s.traits.map((id) => `${TRAITS[id].icon} ${esc(TRAITS[id].name)}`).join(' · ')}</div>
-      </div>
-    </div>
-    <div class="hud-block">
-      <h3>Day ${s.day}</h3>
-      <div class="big">${G.clock(s.hour)}</div>
-      <div class="sub">${G.dateLabel(s.day)} · in ${esc(AREAS[s.area].name)}</div>
-      ${s.today.strike ? '<div class="warn">🚐 Transport strike today</div>' : ''}
-      ${s.today.flood ? '<div class="warn">🌧 Flooding in Cocody, Abobo and Yopougon</div>' : ''}
-    </div>
-    <div class="hud-block">
-      <h3>Money</h3>
-      <div class="big">${n(s.cash)}</div>
-      <div class="money-row sub">
-        <span>Bank ${n(s.bank)}</span>
-        ${s.crypto > 0 ? `<span>Crypto ${n(G.cryptoValue(s))}</span>` : ''}
-        <span>Net worth ${n(G.netWorth(s))}</span>
-      </div>
-    </div>
-    <div class="hud-block bars">
-      ${bar('Energy', s.energy)}
-      ${bar('Health', s.health)}
-      ${bar('Vibes', s.happiness)}
-      ${bar('Clout', s.clout, 'clout')}
-    </div>
-    <div class="hud-block">
-      <h3>Life</h3>
-      <div class="sub">🏠 ${!h ? '<span class="warn">Homeless</span>' : !h.monthly ? `${esc(h.name)} · no rent`
-        : `${esc(h.name)} · ${rentLeft >= 0 ? `rent due in ${rentLeft} days` : `<span class="warn">rent overdue ${-rentLeft} days!</span>`}`}</div>
-      <div class="sub">💼 ${job ? esc(job.title) : 'No job yet'}</div>
-      <div class="chips" style="margin-top:.4rem">
-        <span class="chip">Tech ${s.skills.tech}</span>
-        <span class="chip">Trade ${s.skills.trade}</span>
-        <span class="chip">Charm ${s.skills.charm}</span>
-        ${owned.map((o) => `<span class="chip">${o}</span>`).join('')}
-      </div>
-      ${inv.length ? `<div class="sub" style="margin-top:.3rem">🎒 ${inv.map(esc).join(', ')} (${G.carried(s)}/${G.capacity(s)})</div>` : ''}
-    </div>`;
+  const atHome = G.canSleepAtHome(s);
+  const msg = $('#stage-msg');
+  msg.hidden = true;
+  if (view === 'map') {
+    $('#place').textContent = 'Tap a commune to travel';
+    return;
+  }
+  if (view === 'home' && !atHome) {
+    msg.hidden = false;
+    msg.innerHTML = h
+      ? `<p>Your ${esc(h.name.toLowerCase())} is in <b>${esc(AREAS[h.area].name)}</b>. You're in ${esc(AREAS[s.area].name)}.</p>
+         <button class="primary" id="go-home">Go home</button>`
+      : '<p>You have no home right now. Find a housing agent on the street and save up for the move-in fee.</p>';
+    $('#go-home')?.addEventListener('click', () => openTravel(h.area));
+  }
+  $('#place').textContent = view === 'home' ? `${h ? h.name : 'No home'} · ${AREAS[h?.area ?? s.area].name}` : `${AREAS[s.area].name} · ${AREAS[s.area].blurb}`;
+  if (stage) {
+    $('#stage3d').hidden = !msg.hidden;
+    $('#stage2d').hidden = true;
+    if (view === 'home' && atHome) {
+      const owned = Object.keys(FURNITURE).filter((id) => G.owns(s, id) && id !== 'mattress' && id !== 'net');
+      stage.showHome({ items: [...BASE_OBJECTS, ...owned], mattress: G.owns(s, 'mattress'), net: G.owns(s, 'net'), look: s.avatar });
+    } else if (view === 'street') {
+      stage.showStreet({ area: { id: s.area, ...AREAS[s.area] }, look: s.avatar,
+        people: G.peopleHere(s).map((p) => ({ id: p.id, name: p.name, level: p.level, look: p.look })) });
+    }
+  } else {
+    $('#stage2d').hidden = !msg.hidden;
+    if (view === 'home' && atHome) renderHome();
+    else if (view === 'street') renderStreet();
+  }
+}
+
+function initStage() {
+  if (!has3D()) return;
+  try {
+    stage = createStage($('#stage3d'), { onObject: openObject, onPerson: openPerson });
+  } catch {
+    stage = null;
+  }
 }
 
 function renderMap() {
@@ -182,11 +229,9 @@ function renderMap() {
 
 const GROUPS = { work: 'Hustle', home: 'At home', life: 'Enjoy life', learn: 'Learn', money: 'Money & places', do: 'Other' };
 
-function renderActions() {
-  const area = AREAS[s.area];
-  $('#here-title').textContent = area.name;
-  $('#here-blurb').textContent = area.blurb;
+function openDo() {
   const list = G.actions(s);
+  const here = G.peopleHere(s);
   const html = Object.entries(GROUPS).map(([g, title]) => {
     const items = list.filter((a) => a.group === g);
     if (!items.length) return '';
@@ -197,21 +242,20 @@ function renderActions() {
         ${a.blocked ? `<small class="why"> · ${esc(a.blocked)}</small>` : ''}
       </button>`).join('');
   }).join('');
-  $('#actions').innerHTML = html;
-  for (const b of document.querySelectorAll('[data-act]')) {
-    b.addEventListener('click', () => {
-      const panel = G.act(s, b.dataset.act);
-      render();
-      if (panel) openPanel(panel);
-    });
-  }
-  renderStreet();
-  const unread = G.unreadCount(s);
-  $('#phone-badge').hidden = !unread;
-  $('#phone-badge').textContent = unread;
-  const sleepBtn = $('#btn-sleep');
-  sleepBtn.textContent = G.canSleepAtHome(s) ? '🛏 Sleep at home' : '🛏 Sleep rough here';
-  sleepBtn.title = G.canSleepAtHome(s) ? 'End the day' : 'You are not at home. Sleeping here is risky.';
+  const people = here.length ? `<div class="group-title">People here</div><div class="people">${here.map((p) => `
+      <button class="person" type="button" data-person="${p.id}">${avatarSvg(p.look, { width: 30, label: p.name })}
+        <span><strong>${esc(p.name)}</strong><small>${esc(p.level)}</small></span></button>`).join('')}</div>` : '';
+  showModal(`What now in ${AREAS[s.area].name}?`, `
+    <button class="sleep-btn" data-sleep>🛏 ${G.canSleepAtHome(s) ? 'Sleep at home (end the day)' : 'Sleep rough here (risky)'}</button>
+    ${people}${html}`);
+  wire('[data-act]', (b) => {
+    modal.close();
+    const panel = G.act(s, b.dataset.act);
+    render();
+    if (panel) openPanel(panel);
+  });
+  wire('[data-person]', (b) => openPerson(b.dataset.person));
+  wire('[data-sleep]', () => { modal.close(); trySleep(); });
 }
 
 function relBar(rel) {
@@ -235,10 +279,35 @@ function openPerson(id) {
   wire('[data-social]', (el) => { G.socialize(s, id, el.dataset.social); refresh(() => openPerson(id)); });
 }
 
-function renderGoals() {
-  $('#goals').innerHTML = G.goalList(s)
-    .map((g) => `<li class="${[s.goals[g.id] ? 'done' : '', g.dream ? 'dream' : ''].join(' ')}">${g.dream ? DREAMS[s.dream].icon + ' ' : ''}${esc(g.label)}</li>`)
-    .join('');
+function openLife() {
+  const h = G.house(s);
+  const rentLeft = s.home ? s.home.paidUntil - s.day : null;
+  const job = s.job ? JOBS[s.job] : null;
+  const owned = Object.entries(s.items).filter(([, v]) => v).map(([k]) => k);
+  const inv = Object.entries(s.inventory).map(([k, v]) => `${v.qty} × ${GOODS[k].name}`);
+  showModal('Your life', `
+    <div class="welcome">${avatarSvg(s.avatar, { width: 64, label: s.name })}
+      <div><div class="name">${esc(s.name)}</div><div class="sub">${mood(s.happiness)} · Day ${s.day}</div>
+      <div class="sub">${s.traits.map((id) => `${TRAITS[id].icon} ${esc(TRAITS[id].name)}`).join(' · ')}</div></div></div>
+    <div class="life-grid">
+      <div class="bars">${bar('Energy', s.energy)}${bar('Health', s.health)}${bar('Vibes', s.happiness)}${bar('Clout', s.clout, 'clout')}</div>
+      <div class="stack">
+        <div><b>${n(s.cash)}</b> cash · bank ${n(s.bank)}${s.crypto > 0 ? ` · crypto ${n(G.cryptoValue(s))}` : ''}</div>
+        <div class="sub">Net worth ${n(G.netWorth(s))}</div>
+        <div class="sub">🏠 ${!h ? 'Homeless' : !h.monthly ? `${esc(h.name)} · no rent` : `${esc(h.name)} · rent ${rentLeft >= 0 ? `due in ${rentLeft} days` : `overdue ${-rentLeft} days!`}`}</div>
+        <div class="sub">💼 ${job ? esc(job.title) : 'No job yet'}</div>
+        <div class="chips"><span class="chip">Tech ${s.skills.tech}</span><span class="chip">Trade ${s.skills.trade}</span><span class="chip">Charm ${s.skills.charm}</span>
+          ${owned.map((o) => `<span class="chip">${o}</span>`).join('')}</div>
+        ${inv.length ? `<div class="sub">🎒 ${inv.map(esc).join(', ')} (${G.carried(s)}/${G.capacity(s)})</div>` : ''}
+      </div>
+    </div>
+    <div class="group-title">Goals</div>
+    <ol class="goals">${G.goalList(s).map((g) => `<li class="${[s.goals[g.id] ? 'done' : '', g.dream ? 'dream' : ''].join(' ')}">${g.dream ? DREAMS[s.dream].icon + ' ' : ''}${esc(g.label)}</li>`).join('')}</ol>
+    <div class="group-title">News</div>
+    <ul class="log">${s.log.slice(0, 40).map((l) => `<li class="${l.tone}"><time>Day ${l.day}, ${G.clock(l.hour)}</time>${esc(l.text)}</li>`).join('')}</ul>
+    <div class="money-input"><button data-help>How to play</button><button data-newlife>Start a new life</button></div>`);
+  wire('[data-help]', openHelp);
+  wire('[data-newlife]', () => askFirst('Start a new life?', 'Your current progress will be lost.', 'Start a new life', openSetup));
 }
 
 // ---------- walking scenes ----------
@@ -317,7 +386,7 @@ function bindObjects(svg, handler) {
 // Home objects: where they stand, where you stand to use them, and what you can do there.
 const HOME_OBJECTS = {
   bed: { x: 62, y: 112, label: 'Bed', acts: ['sleep', 'nap', 'liein'] },
-  chair: { x: 150, y: 124, icon: '🪑', label: 'Chair', acts: ['callmaman', 'daydream', 'whatsapp'] },
+  chair: { x: 150, y: 124, icon: '🪑', label: 'Plastic chair', sit: true, acts: ['callmaman', 'daydream', 'whatsapp'] },
   bucket: { x: 326, y: 196, icon: '🪣', label: 'Bucket', acts: ['wash'] },
   fan: { x: 112, y: 96, icon: '🌀', label: 'Standing fan', need: 'fan' },
   net: { x: 62, y: 84, icon: '🕸️', label: 'Mosquito net', need: 'net' },
@@ -325,7 +394,7 @@ const HOME_OBJECTS = {
   stove: { x: 266, y: 96, icon: '🍳', label: 'Gas stove', need: 'stove', acts: ['cook'] },
   tv: { x: 318, y: 96, icon: '📺', label: 'TV', need: 'tv', acts: ['relax'] },
   speaker: { x: 214, y: 186, icon: '🔊', label: 'Speaker', need: 'speaker', acts: ['dance'] },
-  sofa: { x: 268, y: 178, icon: '🛋️', label: 'Sofa', need: 'sofa', acts: ['relax'] },
+  sofa: { x: 268, y: 178, icon: '🛋️', label: 'Sofa', need: 'sofa', sit: true, acts: ['relax'] },
   dog: { x: 150, y: 192, icon: '🐕', label: 'Drogba', need: 'dog', acts: ['playdog'] },
   ac: { x: 100, y: 30, icon: '❄️', label: 'Air conditioner', need: 'ac' },
 };
@@ -338,7 +407,7 @@ const PERFORM = {
 function renderHome() {
   const h = G.house(s);
   if (!h) {
-    $('#home').innerHTML = '<p class="sub">You have no home. Find a housing agent and save up for the move-in fee.</p>';
+    $('#stage2d').innerHTML = '<p class="sub">You have no home.</p>';
     return;
   }
   const here = G.canSleepAtHome(s);
@@ -351,7 +420,7 @@ function renderHome() {
     return `<g class="obj" data-obj="${id}" data-x="${o.x}" data-y="${o.y}" transform="translate(${o.x} ${o.y})"
       tabindex="${here ? 0 : -1}" role="button" aria-label="${esc(o.label)}">${art}</g>`;
   }).join('');
-  $('#home').innerHTML = `
+  $('#stage2d').innerHTML = `
     <div class="room">
       <svg viewBox="0 0 360 220" id="home-scene" role="group" aria-label="Your ${esc(h.name)}. ${here ? 'Click the floor to walk, or an object to use it.' : 'You are out.'}">
         <defs><pattern id="tiles" width="20" height="20" patternUnits="userSpaceOnUse">
@@ -387,15 +456,21 @@ function openObject(id) {
     const act = el.dataset.do;
     modal.close();
     const [icon, pose] = PERFORM[act] ?? ['✨'];
-    const onBed = pose === 'lying' ? { x: HOME_OBJECTS.bed.x + 6, y: HOME_OBJECTS.bed.y + 14 } : null;
-    perform('home', icon, pose, () => {
+    const finish = () => {
       if (act === 'sleep') sleepNow();
       else {
         const panel = G.act(s, act);
         render();
         if (panel) openPanel(panel);
       }
-    }, onBed);
+    };
+    if (stage) {
+      const pose3d = pose === 'lying' ? 'lying' : HOME_OBJECTS[id].sit ? 'sitting' : pose === 'dancing' ? 'dancing' : 'idle';
+      stage.perform({ pose: pose3d, icon, objectId: id, ms: act === 'sleep' ? 1800 : 1400 }, finish);
+      return;
+    }
+    const onBed = pose === 'lying' ? { x: HOME_OBJECTS.bed.x + 6, y: HOME_OBJECTS.bed.y + 14 } : null;
+    perform('home', icon, pose, finish, onBed);
   });
 }
 
@@ -416,7 +491,7 @@ function renderStreet() {
       ${avatarSvg(p.look, { width: 30, label: p.name })}
       <text x="15" y="48" text-anchor="middle" class="npc-name">${esc(p.name)}</text></g>`;
   }).join('');
-  $('#people').innerHTML = `<div class="group-title">Out on the street${here.length ? '' : ' · nobody you know is around right now'}</div>
+  $('#stage2d').innerHTML = `<div class="group-title">Out on the street${here.length ? '' : ' · nobody you know is around right now'}</div>
     <div class="street-scene">
       <svg viewBox="0 0 360 160" id="street-scene" role="group" aria-label="Street in ${esc(area.name)}. Click to walk, click a person to talk.">
         <rect width="360" height="160" class="sky"/>
@@ -433,9 +508,6 @@ function renderStreet() {
   bindObjects(svg, (id, x, y) => walkTo('street', x < scenePos.street.x ? x + 34 : x - 34, y, () => openPerson(id)));
 }
 
-function renderLog() {
-  $('#log').innerHTML = s.log.slice(0, 60).map((l) => `<li class="${l.tone}"><time>Day ${l.day}, ${G.clock(l.hour)}</time>${esc(l.text)}</li>`).join('');
-}
 
 // ---------- modal ----------
 
@@ -473,7 +545,7 @@ function openTravel(to) {
     </div>`).join('');
   showModal(`Travel to ${AREAS[to].name}`, `<p class="sub">${km} km from ${esc(AREAS[s.area].name)}. Rush hours (07h–10h and 16h–20h) are slow.</p>${rows}`);
   wire('[data-mode]', (el) => {
-    if (G.travel(s, to, el.dataset.mode)) { scenePos.street = { x: 30, y: 120 }; render(); showStreet(el.dataset.mode, to); }
+    if (G.travel(s, to, el.dataset.mode)) { scenePos.street = { x: 30, y: 120 }; view = 'street'; render(); showStreet(el.dataset.mode, to); }
   });
 }
 
@@ -657,7 +729,7 @@ function openPhone(app = null) {
       <div><strong>${esc(PEOPLE[m.from].name)}</strong> <small class="sub">day ${m.day}</small><div>${esc(m.text)}</div></div></div>`).join('');
     G.readMessages(s);
     save();
-    renderActions();
+    renderTabs();
     view('Messages', list || '<p class="sub">No messages yet. Make friends around Babi and they will text you.</p>');
   } else if (app === 'contacts') {
     const known = Object.keys(s.people).sort((a, b) => G.relation(s, b) - G.relation(s, a));
@@ -749,18 +821,22 @@ function askFirst(title, text, yesLabel, onYes) {
 
 function sleepNow() {
   G.sleep(s);
+  if (G.canSleepAtHome(s)) view = 'home';
   render();
 }
 
-$('#btn-sleep').addEventListener('click', () => {
+function trySleep() {
   if (G.canSleepAtHome(s)) sleepNow();
   else askFirst('Sleep rough?', s.home ? 'You are not at home. If you sleep here you may get robbed.' : 'You are homeless. Sleep on a bench tonight?', 'Sleep here', sleepNow);
-});
-$('#btn-new').addEventListener('click', () => {
-  askFirst('Start a new life?', 'Your current progress will be lost.', 'Start a new life', openSetup);
-});
-$('#btn-help').addEventListener('click', openHelp);
+}
+
+for (const b of document.querySelectorAll('[data-tab]')) {
+  b.addEventListener('click', () => { view = b.dataset.tab; render(); });
+}
+$('#btn-do').addEventListener('click', openDo);
 $('#btn-phone').addEventListener('click', () => openPhone());
+$('#me').addEventListener('click', openLife);
+$('#btn-help').addEventListener('click', openHelp);
 
 // ---------- new life setup ----------
 
@@ -859,6 +935,9 @@ function showStep() {
     wire('[data-next]', () => {
       inSetup = false;
       s = G.newGame(undefined, draft);
+      view = 'home';
+      lastToast = null;
+      stage?.clear();
       modal.close();
       render();
     });
@@ -878,6 +957,7 @@ function openWelcomeBack() {
   wire('[data-newlife]', openSetup);
 }
 
+initStage();
 render();
 if (!saved) openSetup();
 else if (!hotState && !s.ending) openWelcomeBack();
