@@ -17,6 +17,11 @@
   --floor-a: #f3e7cf;
   --floor-b: #e6d6b6;
   --window: #bfe0ea;
+  --sky: #cfe8f3;
+  --asphalt: #4a4a4f;
+  --bld0: #e3b98a;
+  --bld1: #d9d2c3;
+  --bld2: #b9cfe0;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 4px 16px rgba(0, 0, 0, 0.04);
   color-scheme: light;
 }
@@ -41,6 +46,11 @@
     --floor-a: #3a3326;
     --floor-b: #2f2a1f;
     --window: #173540;
+    --sky: #1d2b3a;
+    --asphalt: #2b2b30;
+    --bld0: #6b5238;
+    --bld1: #4b473f;
+    --bld2: #3c4d5c;
     --shadow: none;
     color-scheme: dark;
   }
@@ -65,11 +75,17 @@
   --floor-a: #3a3326;
   --floor-b: #2f2a1f;
   --window: #173540;
+  --sky: #1d2b3a;
+  --asphalt: #2b2b30;
+  --bld0: #6b5238;
+  --bld1: #4b473f;
+  --bld2: #3c4d5c;
   --shadow: none;
   color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 
 body {
   margin: 0;
@@ -309,4 +325,51 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.5); }
 @media (max-width: 480px) {
   .setup-look { grid-template-columns: minmax(0, 1fr); }
   .tagline { display: none; }
+}
+
+/* People */
+.head-btns { display: flex; gap: 0.4rem; flex-wrap: wrap; justify-content: flex-end; }
+.badge { display: inline-grid; place-items: center; min-width: 1.2rem; height: 1.2rem; padding: 0 0.3rem; border-radius: 99px; background: var(--red); color: #ffffff; font-size: 0.7rem; font-weight: 700; }
+.people { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.4rem; margin-bottom: 0.4rem; }
+.person { display: flex; gap: 0.5rem; align-items: center; text-align: left; background: var(--panel); border-radius: 12px; padding: 0.35rem 0.6rem; }
+.person:hover { border-color: var(--ink); }
+.person span { display: grid; min-width: 0; }
+.person small { color: var(--muted); font-size: 0.75rem; }
+.social { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.4rem; }
+.social button { display: grid; text-align: left; gap: 2px; }
+.social small { color: var(--red); font-size: 0.75rem; }
+
+/* Phone */
+.phone { max-width: 360px; margin: 0 auto; border: 8px solid var(--ink); border-radius: 28px; overflow: hidden; background: var(--bg); }
+.phone-top { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; padding: 0.45rem 0.8rem; font-size: 0.8rem; font-weight: 700; background: var(--chip); }
+.phone-body { padding: 0.8rem; max-height: 60vh; overflow-y: auto; }
+.link { border: none; background: none; color: var(--accent); padding: 0; font-weight: 700; }
+.apps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; }
+.app { position: relative; display: grid; justify-items: center; gap: 0.3rem; border: none; background: none; font-size: 0.8rem; padding: 0.4rem 0; }
+.app-ic { font-size: 1.6rem; width: 3.2rem; height: 3.2rem; display: grid; place-items: center; border-radius: 14px; background: var(--accent-soft); }
+.app .badge { position: absolute; top: 0; right: 18%; }
+.msg { display: flex; gap: 0.6rem; align-items: flex-start; padding: 0.5rem 0; border-top: 1px solid var(--line); }
+.msg:first-child { border-top: none; }
+.msg.unread strong { color: var(--accent); }
+.rich { margin: 0; padding-left: 1.4rem; display: grid; gap: 0.4rem; }
+.rich li { display: flex; justify-content: space-between; gap: 0.5rem; font-variant-numeric: tabular-nums; }
+.rich li.you { color: var(--accent); font-weight: 700; }
+
+/* Street scene */
+.street svg { width: 100%; height: auto; display: block; border-radius: 14px; }
+.sky { fill: var(--sky); }
+.road { fill: var(--asphalt); }
+.lagoon { fill: var(--water); }
+.lane { fill: #f5f1e6; }
+.wave { fill: none; stroke: #ffffff; stroke-opacity: 0.6; stroke-width: 3; }
+.bld0 { fill: var(--bld0); } .bld1 { fill: var(--bld1); } .bld2 { fill: var(--bld2); }
+.awning.a0 { fill: var(--accent); } .awning.a1 { fill: var(--green); } .awning.a2 { fill: var(--red); }
+.palm { fill: var(--green); opacity: 0.7; }
+.vehicle { font-size: 56px; animation: bob 0.5s ease-in-out infinite alternate; }
+.scroll { animation: drive 0.9s linear infinite; }
+.scroll.slow { animation-duration: 2.4s; }
+@keyframes drive { from { transform: translateX(0); } to { transform: translateX(-100px); } }
+@keyframes bob { from { transform: translateY(0); } to { transform: translateY(-3px); } }
+@media (prefers-reduced-motion: reduce) {
+  .scroll, .vehicle { animation: none; }
 }

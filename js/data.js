@@ -132,6 +132,7 @@ export const DREAMS = {
   star: { name: 'Coupé-décalé star', icon: '🎤', blurb: 'Land 5 music video roles and reach 100 clout.' },
   unicorn: { name: 'Babi unicorn', icon: '🦄', blurb: 'Reach 100 tech and land the remote senior engineer job.' },
   abroad: { name: 'Go abroad', icon: '✈️', blurb: 'Get a visa at the embassy in Plateau.' },
+  padi: { name: 'Everybody\'s padi', icon: '🤝', blurb: 'Become padis (80+) with 4 people in Babi.' },
 };
 
 // The birth lottery: one is drawn at random for each new life.
@@ -177,3 +178,80 @@ export const FURNITURE = {
   sofa: { name: 'Leather sofa', icon: '🛋️', price: 120000, clout: 3, blurb: '+3 vibes a night, +3 clout.' },
   ac: { name: 'Air conditioner', icon: '❄️', price: 350000, clout: 5, blurb: '+10 energy a night when the power is on. +5 clout.' },
 };
+
+// ---------- people of Babi ----------
+
+// Residents you can meet. They are in their commune between `hours[0]` and `hours[1]`.
+// A perk unlocks once you are friends (45+). `job` perks let you skip that job's skill requirements.
+export const PEOPLE = {
+  awa: { name: 'Tantie Awa', area: 'adjame', hours: [7, 19], role: 'Pagne seller at Adjamé market',
+    perk: 'discount', perkText: '5% better prices at every market',
+    look: { skin: '#7a4a2a', hair: 'foulard', outfit: '#009e60', pattern: 'kente' } },
+  ibrahim: { name: 'Ibrahim', area: 'adjame', hours: [8, 19], role: 'Phone repairer at the Black Market',
+    perk: 'job', job: 'repair', perkText: 'Gets you hired as a phone repairer without the tech requirement',
+    look: { skin: '#4a2c1a', hair: 'short', outfit: '#1f5fbf', pattern: 'plain' } },
+  yao: { name: 'Yao "Le Boss"', area: 'abobo', hours: [6, 20], role: 'Owns three gbakas',
+    perk: 'loan', perkText: 'Helps you out with 20,000 FCFA once a week',
+    look: { skin: '#a8693f', hair: 'short', outfit: '#c7362b', pattern: 'stripes' } },
+  aicha: { name: 'Aïcha', area: 'abobo', hours: [6, 22], role: 'Sells the best garba in Abobo',
+    perk: 'food', perkText: 'Shares a plate of garba with you once a day',
+    look: { skin: '#7a4a2a', hair: 'foulard', outfit: '#e8b100', pattern: 'dots' } },
+  koffi: { name: 'DJ Koffi', area: 'yopougon', hours: [17, 24], role: 'DJ at a Yop maquis',
+    perk: 'audition', perkText: 'Music video auditions are 15% likelier to succeed',
+    look: { skin: '#4a2c1a', hair: 'locks', outfit: '#7b3fa0', pattern: 'plain' } },
+  mariam: { name: 'Mariam', area: 'cocody', hours: [8, 20], role: 'Computer science student',
+    perk: 'tech', perkText: 'Study sessions together: +4 tech once a week',
+    look: { skin: '#a8693f', hair: 'locks', outfit: '#1f5fbf', pattern: 'dots' } },
+  seydou: { name: 'Monsieur Seydou', area: 'plateau', hours: [8, 18], role: 'Bank branch manager',
+    perk: 'job', job: 'bank', perkText: 'Gets you hired at the bank without the charm requirement',
+    look: { skin: '#4a2c1a', hair: 'short', outfit: '#1d1b16', pattern: 'plain' } },
+  hermann: { name: 'Hermann', area: 'plateau', hours: [9, 19], role: 'Director at a cocoa export firm',
+    perk: 'job', job: 'cocoa', perkText: 'Gets you hired at the cocoa firm without the skill requirements',
+    look: { skin: '#7a4a2a', hair: 'short', outfit: '#7b3fa0', pattern: 'stripes' } },
+  fatou: { name: 'Fatou', area: 'treichville', hours: [8, 20], role: 'Runs a Mobile Money kiosk',
+    perk: 'job', job: 'momo', perkText: 'Gets you hired as a Mobile Money agent without the requirements',
+    look: { skin: '#a8693f', hair: 'afro', outfit: '#f77f00', pattern: 'kente' } },
+  grace: { name: 'Grace', area: 'marcory', hours: [10, 24], role: 'Founder of a Zone 4 fintech',
+    perk: 'job', job: 'pm', perkText: 'Gets you hired as a product manager without the skill requirements',
+    look: { skin: '#d39b6a', hair: 'afro', outfit: '#009e60', pattern: 'plain' } },
+  nadia: { name: 'Nadia', area: 'riviera', hours: [10, 23], role: 'Influencer with 2 million followers',
+    perk: 'clout', perkText: 'Features you in a video: +8 clout once a week',
+    look: { skin: '#d39b6a', hair: 'locks', outfit: '#c7362b', pattern: 'dots' } },
+  didier: { name: 'Didier', area: 'portbouet', hours: [6, 19], role: 'Fisherman and beach football coach',
+    perk: 'food', perkText: 'Shares grilled fish with you once a day',
+    look: { skin: '#4a2c1a', hair: 'short', outfit: '#1f5fbf', pattern: 'stripes' } },
+  paul: { name: 'Pasteur Paul', area: 'bingerville', hours: [7, 20], role: 'Pastor and plantain farmer',
+    perk: 'loan', perkText: 'Helps you out with 20,000 FCFA once a week',
+    look: { skin: '#7a4a2a', hair: 'short', outfit: '#e8b100', pattern: 'kente' } },
+};
+
+// Relationship levels by minimum score.
+export const LEVELS = [[0, 'Stranger'], [20, 'Acquaintance'], [45, 'Friend'], [70, 'Padi'], [90, 'Like family']];
+
+// Businesses you can buy from your phone. Income lands every night.
+export const BUSINESSES = {
+  gbaka: { name: 'Gbaka on the Adjamé–Abobo line', icon: '🚐', price: 2500000, max: 5, income: [18000, 30000],
+    breakdown: 0.05, repair: 60000, blurb: 'Your driver and apprenti work the line every day.' },
+  maquis: { name: 'Maquis in Yopougon', icon: '🍻', price: 6000000, max: 3, income: [40000, 80000],
+    weekend: 1.8, blurb: 'Braised chicken and cold drinks. Busiest on Fridays and Saturdays.' },
+};
+
+// Staff are paid every Saturday. If you can't pay, they leave.
+export const STAFF = {
+  help: { name: 'House help', icon: '🧹', wage: 10000, blurb: 'Keeps your place clean: +3 vibes every night at home.' },
+  cook: { name: 'Cook', icon: '👩🏾‍🍳', wage: 20000, blurb: 'Makes breakfast when you sleep at home: you start the day fed with +10 energy.' },
+};
+
+// Lines for the street scene while you travel.
+export const STREET_LINES = [
+  'The apprenti still owes you 50 FCFA change.',
+  'A vendor passes a cold bissap through the window.',
+  'Someone is selling phone chargers in the traffic.',
+  'Coupé-décalé is blasting from the speaker at the back.',
+  'The driver argues with a woro-woro about a lane.',
+  'A wedding convoy goes past, horns blaring.',
+  'A boy sells garba in little plastic bags at the junction.',
+  'Traffic crawls past a billboard for a new phone.',
+  'A police officer waves the traffic through the junction.',
+  'The lagoon shines in the sun as you cross the bridge.',
+];

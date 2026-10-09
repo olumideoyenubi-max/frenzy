@@ -10,12 +10,23 @@ Every game starts with a short setup, inspired by Lagos Life:
 1. **Look:** pick a name, skin tone, hair (short, afro, locks or a head wrap) and a wax-print outfit.
 2. **Personality:** choose 2 of 10 traits (Hustler, Foodie, Enjaillement spirit, Gym rat, Smooth talker, Lazy bone,
    Clean and careful, Night owl, Tech bro or sis, Musical). Each one changes the rules a little.
-3. **Dream:** this is how you win. A Riviera Golf villa, 10 million FCFA net worth, coupé-décalé stardom, Babi unicorn or going abroad.
+3. **Dream:** this is how you win. A Riviera Golf villa, 10 million FCFA net worth, coupé-décalé stardom, Babi unicorn, going abroad or being everybody's padi.
 4. **Birth lottery:** a random background, from "raised by the streets of Yop" to "you just won the tontine".
 5. **Home:** start in a cour commune in Yopougon, the university residence in Cocody, or on your tantie's living-room mat in Abobo.
 
 Furnish your home from a catalogue (mattress, mosquito net, fan, gas stove, TV, a dog called Drogba, air conditioning and more).
 Each piece has a real effect on sleep, meals, learning or mood, and it moves with you when you change house.
+
+## Around the city
+
+- **People of Babi:** 13 residents live their lives around the city, like Tantie Awa at Adjamé market, DJ Koffi in Yopougon
+  at night, Grace the Zone 4 founder and Nadia the influencer in Riviera. Say hello, gist, crack jokes, give compliments or gifts.
+  Bonds grow from Stranger to Acquaintance, Friend, Padi and Like family. Friends unlock perks: job referrals that skip
+  skill requirements, better market prices, loans, free meals, study sessions and video features. Friends also text you.
+- **Street scenes:** every trip shows your gbaka, taxi, moto or water bus on the road, with a bit of Abidjan street life.
+- **At home:** call Maman, dance to coupé-décalé, daydream about going abroad, or sell on your WhatsApp status.
+- **Your phone:** Messages, Contacts, BabiCoin, the Babi rich list, Business (buy gbakas and maquis that earn every night)
+  and Staff (a house help or a cook, paid every Saturday).
 
 ## Play
 

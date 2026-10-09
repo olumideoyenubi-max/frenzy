@@ -2,16 +2,15 @@
 
 import {
   AREAS, ROADS, GOODS, MARKETS, JOBS, HOUSES, MOVE_IN_MONTHS, JAPA,
-  TRAITS, DREAMS, BACKGROUNDS, STARTS, AVATAR, FURNITURE,
+  TRAITS, DREAMS, BACKGROUNDS, STARTS, AVATAR, FURNITURE, PEOPLE, STREET_LINES,
 } from './data.js';
 import * as G from './engine.js';
 
 const SAVE_KEY = 'babi-frenzy-save-v2';
-const SAVE_VERSION = 2;
 const $ = (sel) => document.querySelector(sel);
 const modal = $('#modal');
 const hotState = window.claude?.hot?.data?.state;
-const saved = hotState?.version === SAVE_VERSION ? hotState : load();
+const saved = G.migrate(hotState) ?? load();
 // A placeholder life sits behind the setup screen until the player creates their own.
 let s = saved ?? G.newGame();
 let inSetup = !saved;
@@ -22,7 +21,7 @@ function load() {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
     const saved = raw && JSON.parse(raw);
-    return saved?.version === SAVE_VERSION ? saved : null;
+    return G.migrate(saved);
   } catch {
     return null;
   }
@@ -181,7 +180,7 @@ function renderMap() {
   }
 }
 
-const GROUPS = { work: 'Hustle', life: 'Enjoy life', learn: 'Learn', money: 'Money & places', do: 'Other' };
+const GROUPS = { work: 'Hustle', home: 'At home', life: 'Enjoy life', learn: 'Learn', money: 'Money & places', do: 'Other' };
 
 function renderActions() {
   const area = AREAS[s.area];
@@ -206,9 +205,45 @@ function renderActions() {
       if (panel) openPanel(panel);
     });
   }
+  renderPeople();
+  const unread = G.unreadCount(s);
+  $('#phone-badge').hidden = !unread;
+  $('#phone-badge').textContent = unread;
   const sleepBtn = $('#btn-sleep');
   sleepBtn.textContent = G.canSleepAtHome(s) ? '🛏 Sleep at home' : '🛏 Sleep rough here';
   sleepBtn.title = G.canSleepAtHome(s) ? 'End the day' : 'You are not at home. Sleeping here is risky.';
+}
+
+function renderPeople() {
+  const here = G.peopleHere(s);
+  $('#people').innerHTML = here.length ? `<div class="group-title">People here</div>
+    <div class="people">${here.map((p) => `
+      <button class="person" type="button" data-person="${p.id}">
+        ${avatarSvg(p.look, { width: 34, label: p.name })}
+        <span><strong>${esc(p.name)}</strong><small>${esc(p.level)}${p.rel ? ` · ${p.rel}` : ''}</small></span>
+      </button>`).join('')}</div>` : '';
+  for (const b of document.querySelectorAll('[data-person]')) b.addEventListener('click', () => openPerson(b.dataset.person));
+}
+
+function relBar(rel) {
+  return `<div class="bar"><span>Bond</span><div class="bar-track"><div class="bar-fill clout" style="width:${rel}%"></div></div><span>${rel}</span></div>`;
+}
+
+function openPerson(id) {
+  const p = PEOPLE[id];
+  const rel = G.relation(s, id);
+  const opts = G.socialOptions(s, id);
+  showModal(p.name, `<div class="welcome">
+      ${avatarSvg(p.look, { width: 64, label: p.name })}
+      <div class="stack" style="flex:1;min-width:0">
+        <div><strong>${esc(p.role)}</strong><div class="sub">${esc(AREAS[p.area].name)}, ${G.clock(p.hours[0])}–${G.clock(p.hours[1] % 24)} · ${esc(G.levelName(rel))}</div></div>
+        ${relBar(rel)}
+      </div>
+    </div>
+    <p class="sub">${rel >= 45 ? '✅' : '🔒'} Friend perk: ${esc(p.perkText)}${rel >= 45 ? '' : ' (unlocks at 45)'}.</p>
+    <div class="social">${opts.map((o) => `<button data-social="${o.id}" ${o.blocked ? 'disabled' : ''}>
+      <strong>${esc(o.label)}</strong>${o.blocked ? `<small>${esc(o.blocked)}</small>` : ''}</button>`).join('')}</div>`);
+  wire('[data-social]', (el) => { G.socialize(s, id, el.dataset.social); refresh(() => openPerson(id)); });
 }
 
 function renderGoals() {
@@ -288,8 +323,40 @@ function openTravel(to) {
     </div>`).join('');
   showModal(`Travel to ${AREAS[to].name}`, `<p class="sub">${km} km from ${esc(AREAS[s.area].name)}. Rush hours (07h–10h and 16h–20h) are slow.</p>${rows}`);
   wire('[data-mode]', (el) => {
-    if (G.travel(s, to, el.dataset.mode)) { modal.close(); render(); }
+    if (G.travel(s, to, el.dataset.mode)) { render(); showStreet(el.dataset.mode, to); }
   });
+}
+
+const VEHICLE = { gbaka: '🚐', boat: '🛥️', woro: '🚕', moto: '🛵', taxi: '🚖', car: '🚗' };
+let streetTimer = 0;
+
+function showStreet(mode, to) {
+  const water = mode === 'boat';
+  const blocks = Array.from({ length: 10 }, (_, i) => {
+    const h = 40 + ((i * 37) % 60);
+    const x = i * 100 + 10;
+    return water ? `<path d="M${x} 120 l40 -${h / 2} l40 ${h / 2}Z" class="palm"/>`
+      : `<rect x="${x}" y="${130 - h}" width="70" height="${h}" class="bld bld${i % 3}"/><rect x="${x + 10}" y="${138 - h}" width="50" height="8" class="awning a${i % 3}"/>`;
+  }).join('');
+  const line = STREET_LINES[Math.floor(Math.random() * STREET_LINES.length)];
+  showModal(`On the way to ${AREAS[to].name}`, `
+    <div class="street ${water ? 'water' : ''}">
+      <svg viewBox="0 0 600 220" role="img" aria-label="${water ? 'The lagoon' : 'Street traffic'} on the way to ${esc(AREAS[to].name)}">
+        <rect width="600" height="220" class="sky"/>
+        <g class="scroll slow">${blocks}</g>
+        <rect y="130" width="600" height="90" class="${water ? 'lagoon' : 'road'}"/>
+        <g class="scroll">${water ? Array.from({ length: 12 }, (_, i) => `<path d="M${i * 100} 180 q25 -10 50 0 t50 0" class="wave"/>`).join('')
+          : Array.from({ length: 12 }, (_, i) => `<rect x="${i * 100}" y="173" width="50" height="5" class="lane"/>`).join('')}</g>
+        <text x="300" y="${water ? 168 : 165}" text-anchor="middle" class="vehicle">${VEHICLE[mode]}</text>
+      </svg>
+    </div>
+    <p class="event-text">${esc(line)}</p>
+    <p class="sub">${esc(s.log[0].text)}</p>
+    <div class="stack"><button class="primary" data-arrive>Arrive in ${esc(AREAS[to].name)}</button></div>`);
+  const arrive = () => { clearTimeout(streetTimer); if (modal.open) modal.close(); };
+  wire('[data-arrive]', arrive);
+  clearTimeout(streetTimer);
+  streetTimer = setTimeout(() => { if ($('#modal-body [data-arrive]')) arrive(); }, 4000);
 }
 
 function openPanel(id) {
@@ -405,15 +472,72 @@ function openBank() {
   wire('[data-wdall]', () => { G.withdraw(s, s.bank); refresh(openBank); });
 }
 
-function openPhone() {
-  showModal('BabiCoin', `
-    <p>1 coin = <strong>${n(s.cryptoPrice)}</strong></p>
-    <p>You hold ${s.crypto.toFixed(3)} coins, worth <strong>${n(G.cryptoValue(s))}</strong>. Cash ${n(s.cash)}.</p>
-    <p class="sub">The price moves every night. It can fly, and it can crash. Don't put your rent money in.</p>
-    ${moneyForm('coin')}<button data-cbuy>Buy</button></div>
-    <div class="money-input"><button data-csell="0.5" ${s.crypto ? '' : 'disabled'}>Sell half</button><button class="primary" data-csell="1" ${s.crypto ? '' : 'disabled'}>Sell all</button></div>`);
-  wire('[data-cbuy]', () => { G.buyCrypto(s, Number($('#coin-amt').value) || 0); refresh(openPhone); });
-  wire('[data-csell]', (el) => { G.sellCrypto(s, Number(el.dataset.csell)); refresh(openPhone); });
+const APPS = [
+  { id: 'messages', name: 'Messages', icon: '💬', basic: true },
+  { id: 'contacts', name: 'Contacts', icon: '👥', basic: true },
+  { id: 'coin', name: 'BabiCoin', icon: '🪙' },
+  { id: 'rich', name: 'Rich list', icon: '👑' },
+  { id: 'business', name: 'Business', icon: '🏪' },
+  { id: 'staff', name: 'Staff', icon: '🧹' },
+];
+
+function phoneFrame(title, body, back = true) {
+  return `<div class="phone">
+    <div class="phone-top"><span>${G.clock(s.hour)}</span>${back ? '<button class="link" data-home>‹ Apps</button>' : ''}<span>${esc(title)}</span></div>
+    <div class="phone-body">${body}</div></div>`;
+}
+
+function openPhone(app = null) {
+  const smart = s.items.smartphone;
+  const view = (title, body) => {
+    showModal('Phone', phoneFrame(title, body));
+    wire('[data-home]', () => openPhone());
+  };
+  if (!app) {
+    const unread = G.unreadCount(s);
+    showModal('Phone', phoneFrame(smart ? 'Smartphone' : 'Basic phone', `<div class="apps">${APPS.map((a) => {
+      const locked = !a.basic && !smart;
+      return `<button class="app" data-app="${a.id}" ${locked ? 'disabled' : ''}><span class="app-ic">${a.icon}</span>${esc(a.name)}${a.id === 'messages' && unread ? `<span class="badge">${unread}</span>` : ''}</button>`;
+    }).join('')}</div>${smart ? '' : '<p class="sub">Buy a smartphone at the Black Market in Adjamé to unlock more apps.</p>'}`, false));
+    wire('[data-app]', (el) => openPhone(el.dataset.app));
+    return;
+  }
+  if (app === 'messages') {
+    const list = s.messages.map((m) => `<div class="msg ${m.read ? '' : 'unread'}">${avatarSvg(PEOPLE[m.from].look, { width: 28, label: PEOPLE[m.from].name })}
+      <div><strong>${esc(PEOPLE[m.from].name)}</strong> <small class="sub">day ${m.day}</small><div>${esc(m.text)}</div></div></div>`).join('');
+    G.readMessages(s);
+    save();
+    renderActions();
+    view('Messages', list || '<p class="sub">No messages yet. Make friends around Babi and they will text you.</p>');
+  } else if (app === 'contacts') {
+    const known = Object.keys(s.people).sort((a, b) => G.relation(s, b) - G.relation(s, a));
+    view('Contacts', known.length ? known.map((id) => `<div class="msg">${avatarSvg(PEOPLE[id].look, { width: 28, label: PEOPLE[id].name })}
+      <div style="flex:1;min-width:0"><strong>${esc(PEOPLE[id].name)}</strong> <small class="sub">${esc(G.levelName(G.relation(s, id)))} · ${esc(AREAS[PEOPLE[id].area].name)}</small>${relBar(G.relation(s, id))}</div></div>`).join('')
+      : '<p class="sub">No contacts yet. Say hello to people you meet around the city.</p>');
+  } else if (app === 'coin') {
+    view('BabiCoin', `
+      <p>1 coin = <strong>${n(s.cryptoPrice)}</strong></p>
+      <p>You hold ${s.crypto.toFixed(3)} coins, worth <strong>${n(G.cryptoValue(s))}</strong>. Cash ${n(s.cash)}.</p>
+      <p class="sub">The price moves every night. It can fly, and it can crash. Don't put your rent money in.</p>
+      ${moneyForm('coin')}<button data-cbuy>Buy</button></div>
+      <div class="money-input"><button data-csell="0.5" ${s.crypto ? '' : 'disabled'}>Sell half</button><button class="primary" data-csell="1" ${s.crypto ? '' : 'disabled'}>Sell all</button></div>`);
+    wire('[data-cbuy]', () => { G.buyCrypto(s, Number($('#coin-amt').value) || 0); refresh(() => openPhone('coin')); });
+    wire('[data-csell]', (el) => { G.sellCrypto(s, Number(el.dataset.csell)); refresh(() => openPhone('coin')); });
+  } else if (app === 'rich') {
+    view('Babi rich list', `<ol class="rich">${G.richList(s).map((r) => `<li class="${r.you ? 'you' : ''}"><span><strong>${esc(r.name)}</strong><small class="sub"> · ${esc(r.source)}</small></span><span>${n(r.worth)}</span></li>`).join('')}</ol>`);
+  } else if (app === 'business') {
+    view('Business', `<p class="sub">Cash ${n(s.cash)}. Takings land in your cash every night.</p>${G.businessList(s).map((b) => `
+      <div class="row"><div><strong>${b.icon} ${esc(b.name)}</strong><div class="meta">${n(b.price)} · earns ${n(b.income[0])}–${n(b.income[1])} a day · you own ${b.owned}</div>
+        <div class="meta">${esc(b.blurb)}</div>${b.blocked ? `<div class="why">${esc(b.blocked)}</div>` : ''}</div>
+        <div class="btns"><button class="primary" data-biz="${b.id}" ${b.blocked ? 'disabled' : ''}>Buy</button></div></div>`).join('')}`);
+    wire('[data-biz]', (el) => { G.buyBusiness(s, el.dataset.biz); refresh(() => openPhone('business')); });
+  } else if (app === 'staff') {
+    view('Staff', `<p class="sub">Wages are paid every Saturday. If you can't pay, they leave.</p>${G.staffList(s).map((st) => `
+      <div class="row"><div><strong>${st.icon} ${esc(st.name)}</strong><div class="meta">${n(st.wage)} a week · ${esc(st.blurb)}</div>${st.blocked && !st.hired ? `<div class="why">${esc(st.blocked)}</div>` : ''}</div>
+        <div class="btns">${st.hired ? `<button data-fire="${st.id}">Let go</button>` : `<button class="primary" data-hire="${st.id}" ${st.blocked ? 'disabled' : ''}>Hire</button>`}</div></div>`).join('')}`);
+    wire('[data-hire]', (el) => { G.setStaff(s, el.dataset.hire, true); refresh(() => openPhone('staff')); });
+    wire('[data-fire]', (el) => { G.setStaff(s, el.dataset.fire, false); refresh(() => openPhone('staff')); });
+  }
 }
 
 function openEvent() {
@@ -457,6 +581,8 @@ function openHelp() {
     <ul>
       <li>Rent is due every month, and moving in costs ${MOVE_IN_MONTHS} months up front. Miss the rent by more than 7 days and you're out.</li>
       <li>Furnish your home: a mattress, a fan or a stove make every night and meal better.</li>
+      <li>Meet people around the city. Friends unlock perks: job referrals, loans, free meals and more.</li>
+      <li>Your phone has messages from friends, a rich list, staff to hire and businesses to buy.</li>
       <li>CIE sometimes cuts the power. A generator helps you sleep. Keep your savings in the bank, away from pickpockets.</li>
       <li>If your health hits zero, it's game over. Moving abroad needs ${n(JAPA.proofOfFunds)} in proof of funds.</li>
     </ul>
@@ -484,6 +610,7 @@ $('#btn-new').addEventListener('click', () => {
   askFirst('Start a new life?', 'Your current progress will be lost.', 'Start a new life', openSetup);
 });
 $('#btn-help').addEventListener('click', openHelp);
+$('#btn-phone').addEventListener('click', () => openPhone());
 
 // ---------- new life setup ----------
 

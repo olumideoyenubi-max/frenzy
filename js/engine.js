@@ -4,6 +4,7 @@
 import {
   AREAS, TRANSPORT, JOBS, GOODS, MARKETS, HOUSES, MOVE_IN_MONTHS, ADVANCE_DAYS, ITEMS, SHOP_AREA,
   JAPA, GEN_FUEL, CARRY, TRAITS, DREAMS, BACKGROUNDS, STARTS, AVATAR, FURNITURE,
+  PEOPLE, LEVELS, BUSINESSES, STAFF,
 } from './data.js';
 
 const START_DATE = Date.UTC(2026, 0, 5); // Day 1 is Monday, 5 January 2026
@@ -133,13 +134,30 @@ export function drawBackground(random = Math.random) {
   return (list.find(([, b]) => (r -= b.weight) < 0) ?? list[0])[0];
 }
 
+// Brings an older save up to date. Returns null if it can't be used.
+export function migrate(saved) {
+  if (!saved || typeof saved !== 'object') return null;
+  if (saved.version === 2) {
+    saved.people ??= {};
+    saved.favours ??= {};
+    saved.messages ??= [];
+    saved.businesses ??= { gbaka: 0, maquis: 0 };
+    saved.staff ??= { help: false, cook: false };
+    saved.sleptHome ??= false;
+    saved.today.talked ??= {};
+    saved.today.homeDone ??= [];
+    saved.version = 3;
+  }
+  return saved.version === 3 ? saved : null;
+}
+
 export function newGame(seed = (Date.now() ^ (Math.random() * 1e9)) >>> 0, setup = {}) {
   const cfg = { ...DEFAULT_SETUP, ...setup };
   const startHome = STARTS[cfg.start] ? cfg.start : 'cour';
   const home = HOUSES[startHome];
   const bg = BACKGROUNDS[cfg.background];
   const s = {
-    version: 2,
+    version: 3,
     seed,
     rng: seed | 0,
     name: String(cfg.name).trim().slice(0, 24) || DEFAULT_SETUP.name,
@@ -165,6 +183,12 @@ export function newGame(seed = (Date.now() ^ (Math.random() * 1e9)) >>> 0, setup
     job: null,
     items: { smartphone: false, laptop: false, generator: false, car: false },
     furniture: {},
+    people: {},
+    favours: {},
+    messages: [],
+    businesses: { gbaka: 0, maquis: 0 },
+    staff: { help: false, cook: false },
+    sleptHome: false,
     inventory: {},
     powerBoostUntil: 0,
     today: null,
@@ -198,7 +222,15 @@ function startDay(s) {
     ate: false,
     worked: false,
     tradedAt: [],
+    talked: {},
+    homeDone: [],
   };
+  if (s.staff.cook && s.sleptHome) {
+    s.today.ate = true;
+    addStat(s, 'energy', 10);
+    log(s, 'Your cook made breakfast: hot bread, omelette and Nescafé. +10 energy.', 'good');
+  }
+  friendMessages(s);
   if (rand(s) < 0.06) {
     s.today.strike = true;
     log(s, 'Transport strike! Few gbakas are running and every fare has gone up.', 'bad');
@@ -234,6 +266,7 @@ export function canSleepAtHome(s) {
 
 export function sleep(s) {
   if (s.ending || s.pendingEvent) return;
+  s.sleptHome = canSleepAtHome(s);
   if (canSleepAtHome(s)) {
     const h = house(s);
     let gain = h.sleep;
@@ -253,7 +286,7 @@ export function sleep(s) {
     if (owns(s, 'ac') && !powerOut) gain += 10;
     if (hasTrait(s, 'lazy')) gain += 10;
     addStat(s, 'energy', gain);
-    const comfort = (owns(s, 'speaker') ? 2 : 0) + (owns(s, 'dog') ? 4 : 0) + (owns(s, 'sofa') ? 3 : 0);
+    const comfort = (owns(s, 'speaker') ? 2 : 0) + (owns(s, 'dog') ? 4 : 0) + (owns(s, 'sofa') ? 3 : 0) + (s.staff.help ? 3 : 0);
     addStat(s, 'happiness', h.mood + comfort);
   } else {
     addStat(s, 'energy', 25);
@@ -283,6 +316,8 @@ function endOfDay(s) {
   if (s.happiness < 10) addStat(s, 'health', -3);
   addStat(s, 'happiness', -2);
   s.bank = Math.round(s.bank * 1.0005);
+  businessIncome(s);
+  if (dateOf(s.day).getUTCDay() === 6) payStaff(s);
   const drift = 0.002 + (rand(s) + rand(s) + rand(s) - 1.5) * 0.09;
   s.cryptoPrice = Math.max(200, Math.round(s.cryptoPrice * Math.exp(drift)));
   s.day += 1;
@@ -389,7 +424,8 @@ function blockReason(s, { hours = 0, cost = 0, energy = 0, from = 0, until = DAY
 
 export function jobBlock(s, jobId) {
   const job = JOBS[jobId];
-  for (const [k, v] of Object.entries(job.req)) {
+  const referred = friendsWithPerk(s, 'job').some((id) => PEOPLE[id].job === jobId);
+  for (const [k, v] of referred ? [] : Object.entries(job.req)) {
     const have = k === 'clout' ? s.clout : s.skills[k];
     if (have < v) return `Needs ${k} ${v}`;
   }
@@ -471,6 +507,12 @@ export function actions(s) {
     add('relax', owns(s, 'tv') ? 'Watch TV at home' : 'Watch an Ivorian series on your phone at home',
       `2h · +10 energy, +${owns(s, 'tv') ? 16 : 8} vibes`, { hours: 2, group: 'life' });
     if (owns(s, 'stove')) add('cook', 'Cook at home', `1h · ${cfa(300)} · +20 energy, +5 health`, { hours: 1, cost: 300, group: 'life' });
+    const once = (id) => (s.today.homeDone.includes(id) ? 'Already done today' : null);
+    const home = (id, label, desc, opts) => { add(id, label, desc, { ...opts, group: 'home' }); const a = list[list.length - 1]; a.blocked ??= once(id); };
+    home('callmaman', 'Call Maman', '30 min · +8 vibes · she might send something', { hours: 0.5 });
+    home('dance', 'Dance to coupé-décalé', '1h · +6 vibes, +2 health · -5 energy', { hours: 1, energy: 5 });
+    home('daydream', 'Daydream about going abroad', '30 min · +3 vibes', { hours: 0.5 });
+    if (s.items.smartphone) home('whatsapp', 'Sell things on your WhatsApp status', `2h · earn about ${cfa(500 + s.skills.trade * 100)}`, { hours: 2, from: 8 });
     add('furnish', 'Furnish your home', 'No time cost · mattress, fan, stove, TV and more', { group: 'life' });
   }
   if (at(PLACES.maquis, a)) add('maquis', 'Night out at a Yop maquis', `4h · ${cfa(2000)} · +${party(s, 25)} vibes, +${party(s, 2)} clout · -${nightEnergy(s, 10)} energy`, { hours: 4, cost: 2000, energy: nightEnergy(s, 10), from: 18, group: 'life' });
@@ -490,7 +532,6 @@ export function actions(s) {
   // Money and places
   if (MARKETS[a]) add('market', `Trade at ${MARKETS[a]}`, '1h to open · buy cheap, sell dear', { hours: 1, from: 7, until: 20, group: 'money' });
   if (at(PLACES.bank, a)) add('bank', 'Go to the bank', 'No time cost · save, withdraw', { from: 8, until: 16, group: 'money' });
-  if (s.items.smartphone) add('phone', 'Check crypto on your phone', 'No time cost · buy and sell coin', { group: 'money' });
   if (a === SHOP_AREA) add('shop', 'Shop at the Black Market and the car lot', '1h · phones, laptops, generators, cars', { hours: 1, from: 8, until: 19, group: 'money' });
   if (Object.values(HOUSES).some((h) => h.area === a)) add('agent', 'See a housing agent', '1h · rent a place here', { hours: 1, from: 8, until: 18, group: 'money' });
   if (canSleepAtHome(s) && house(s).monthly) add('rent', 'Pay a month of rent', `${cfa(house(s).monthly)} · covers 30 more days`, { cost: house(s).monthly, group: 'money' });
@@ -551,7 +592,7 @@ export function act(s, id) {
     }
     case 'audition': {
       addStat(s, 'energy', -15);
-      const chance = 0.2 + s.skills.charm / 250 + s.clout / 300 + (hasTrait(s, 'musical') ? 0.2 : 0);
+      const chance = 0.2 + s.skills.charm / 250 + s.clout / 300 + (hasTrait(s, 'musical') ? 0.2 : 0) + (friendsWithPerk(s, 'audition').length ? 0.15 : 0);
       if (rand(s) < chance) {
         const fee = roundTo((25000 + s.skills.charm * 1000 + s.clout * 800) * (hasTrait(s, 'musical') ? 1.5 : 1), 500);
         s.cash += fee;
@@ -599,6 +640,37 @@ export function act(s, id) {
       s.today.ate = true;
       log(s, 'You cooked attiéké with sauce graine at home. Cheap and tasty.');
       break;
+    case 'callmaman': {
+      s.today.homeDone.push(id);
+      addStat(s, 'happiness', 8);
+      if (rand(s) < (s.cash < 5000 ? 0.5 : 0.2)) {
+        s.cash += 5000;
+        log(s, 'Maman asked if you are eating well, then sent 5,000 FCFA by Mobile Money "for food".', 'good');
+      } else {
+        log(s, 'Maman gave you all the family news and reminded you to go to church. +8 vibes.');
+      }
+      break;
+    }
+    case 'dance':
+      s.today.homeDone.push(id);
+      addStat(s, 'happiness', 6);
+      addStat(s, 'health', 2);
+      addStat(s, 'energy', -5);
+      log(s, 'You danced the "Gbê" in your room until the neighbours banged on the wall.');
+      break;
+    case 'daydream':
+      s.today.homeDone.push(id);
+      addStat(s, 'happiness', 3);
+      log(s, 'You scrolled through photos of Paris and Montréal and planned your future. One day...');
+      break;
+    case 'whatsapp': {
+      s.today.homeDone.push(id);
+      const earned = roundTo((500 + s.skills.trade * 100) * (0.6 + rand(s) * 0.8), 25);
+      s.cash += earned;
+      addSkill(s, 'trade', 1);
+      log(s, `You posted perfume, sneakers and wax pagne on your WhatsApp status. Sales: ${cfa(earned)}.`, 'good');
+      break;
+    }
     case 'study':
       addSkill(s, 'tech', 2);
       addStat(s, 'energy', -10);
@@ -735,7 +807,7 @@ export function price(s, good, area = s.area) {
   return roundTo(g.base * (g.mods[area] ?? 1) * noise * (g.fx ? s.fx : 1), 25);
 }
 
-const tradeEdge = (s) => Math.min(0.15, s.skills.trade * 0.002);
+const tradeEdge = (s) => Math.min(0.15, s.skills.trade * 0.002) + (friendsWithPerk(s, 'discount').length ? 0.05 : 0);
 export const buyPrice = (s, good) => roundTo(price(s, good) * (1 - tradeEdge(s)), 25);
 export const sellPrice = (s, good) => roundTo(price(s, good) * (1 + tradeEdge(s)) * 0.95, 25);
 
@@ -1023,6 +1095,7 @@ export const GOALS = [
   { id: 'half', label: 'Net worth of 500,000 FCFA' },
   { id: 'car', label: 'Own a car' },
   { id: 'fiveMillion', label: 'Net worth of 5 million FCFA' },
+  { id: 'friend', label: 'Make a friend in Babi' },
 ];
 
 export function goalList(s) {
@@ -1035,6 +1108,7 @@ function dreamReached(s) {
     case 'landlord': return netWorth(s) >= 10_000_000;
     case 'star': return s.stats.roles >= 5 && s.clout >= 100;
     case 'unicorn': return s.skills.tech >= 100 && s.job === 'remote';
+    case 'padi': return Object.values(s.people).filter((p) => p.rel >= 80).length >= 4;
     default: return false; // 'abroad' is reached at the embassy
   }
 }
@@ -1046,6 +1120,7 @@ function updateGoals(s) {
   if (s.items.car) g.car = true;
   if (netWorth(s) >= 5e5) g.half = true;
   if (netWorth(s) >= 5e6) g.fiveMillion = true;
+  if (Object.values(s.people).some((p) => p.rel >= 45)) g.friend = true;
   if (!s.ending && dreamReached(s)) {
     g.dream = true;
     const d = DREAMS[s.dream];
@@ -1057,4 +1132,235 @@ function updateGoals(s) {
     };
     log(s, `You reached your dream: ${d.name}!`, 'good');
   }
+}
+
+// ---------- people ----------
+
+export function levelName(rel) {
+  return LEVELS.filter(([min]) => rel >= min).pop()[1];
+}
+
+export const relation = (s, id) => s.people[id]?.rel ?? 0;
+
+export function friendsWithPerk(s, perk) {
+  return Object.keys(PEOPLE).filter((id) => PEOPLE[id].perk === perk && relation(s, id) >= 45);
+}
+
+export function peopleHere(s) {
+  return Object.entries(PEOPLE)
+    .filter(([, p]) => p.area === s.area && s.hour >= p.hours[0] && s.hour < p.hours[1])
+    .map(([id, p]) => ({ id, ...p, rel: relation(s, id), level: levelName(relation(s, id)) }));
+}
+
+const SOCIAL = {
+  hello: { label: 'Say hello', hours: 0.25, min: 0 },
+  gist: { label: 'Gist (chat)', hours: 1, min: 15 },
+  joke: { label: 'Crack a joke', hours: 0.25, min: 10 },
+  compliment: { label: 'Give a compliment', hours: 0.25, min: 0 },
+  gift: { label: 'Offer a gift', hours: 0.25, min: 20, cost: 2000 },
+  favour: { label: 'Ask a favour', hours: 0.5, min: 45 },
+};
+
+const FAVOUR_COOLDOWN = { loan: 7, tech: 7, clout: 7, food: 1 };
+
+export function socialOptions(s, id) {
+  const p = PEOPLE[id];
+  const here = peopleHere(s).some((x) => x.id === id);
+  const done = s.today.talked[id] ?? [];
+  return Object.entries(SOCIAL)
+    .filter(([k]) => k !== 'favour' || FAVOUR_COOLDOWN[p.perk])
+    .map(([k, a]) => {
+      let blocked = null;
+      if (!here) blocked = `${p.name} isn't here right now`;
+      else if (relation(s, id) < a.min) blocked = `Needs ${levelName(a.min).toLowerCase()} level (${a.min})`;
+      else if (done.includes(k)) blocked = 'Already done today';
+      else if (k === 'favour' && (s.favours[id] ?? -99) + FAVOUR_COOLDOWN[p.perk] > s.day) blocked = 'Ask again later';
+      else if (a.cost && a.cost > s.cash) blocked = 'Not enough cash';
+      else if (s.hour + a.hours > DAY_END) blocked = 'Too late in the day';
+      return { id: k, label: k === 'gift' ? `${a.label} (${cfa(a.cost)})` : a.label, blocked };
+    });
+}
+
+function addRel(s, id, delta) {
+  const p = (s.people[id] ??= { rel: 0 });
+  const before = levelName(p.rel);
+  p.rel = clamp(p.rel + delta);
+  const after = levelName(p.rel);
+  if (after !== before && delta > 0) log(s, `You and ${PEOPLE[id].name} are now: ${after}.`, 'good');
+}
+
+const GIST = [
+  'talked about the Éléphants\' last match for an hour',
+  'shared the latest gist from the quartier',
+  'argued about who makes the best attiéké in Babi',
+  'laughed about the gbaka driver who took the wrong road',
+  'talked about plans for the future',
+];
+
+export function socialize(s, id, act) {
+  if (s.ending || s.pendingEvent) return false;
+  const opt = socialOptions(s, id).find((o) => o.id === act);
+  if (!opt || opt.blocked) return false;
+  const p = PEOPLE[id];
+  const a = SOCIAL[act];
+  s.hour += a.hours;
+  (s.today.talked[id] ??= []).push(act);
+  const first = !s.people[id];
+  switch (act) {
+    case 'hello':
+      addRel(s, id, first ? 10 : 4);
+      log(s, first ? `You introduced yourself to ${p.name}, ${p.role.toLowerCase()}.` : `You greeted ${p.name}. "On dit quoi?"`);
+      break;
+    case 'gist':
+      addRel(s, id, 8);
+      addStat(s, 'happiness', 4);
+      log(s, `You and ${p.name} ${GIST[Math.floor(rand(s) * GIST.length)]}. +4 vibes.`);
+      break;
+    case 'joke':
+      if (rand(s) < 0.4 + s.skills.charm / 150) {
+        addRel(s, id, 10);
+        addStat(s, 'happiness', 3);
+        log(s, `${p.name} laughed so hard they had to sit down.`, 'good');
+      } else {
+        addRel(s, id, -3);
+        log(s, `Your joke fell flat. ${p.name} gave you a polite smile.`, 'bad');
+      }
+      break;
+    case 'compliment':
+      addRel(s, id, hasTrait(s, 'talker') ? 9 : 5);
+      log(s, `You complimented ${p.name}. They looked pleased.`);
+      break;
+    case 'gift':
+      s.cash -= a.cost;
+      addRel(s, id, 12);
+      log(s, `You gave ${p.name} a small gift. "Ah, you shouldn't have!"`, 'good');
+      break;
+    case 'favour':
+      s.favours[id] = s.day;
+      doFavour(s, id);
+      break;
+    default:
+      break;
+  }
+  updateGoals(s);
+  return true;
+}
+
+function doFavour(s, id) {
+  const p = PEOPLE[id];
+  if (p.perk === 'loan') {
+    s.cash += 20000;
+    log(s, `${p.name} slipped you 20,000 FCFA. "Pay me back when things are better."`, 'good');
+  } else if (p.perk === 'tech') {
+    addSkill(s, 'tech', 4);
+    log(s, `You studied algorithms with ${p.name} at the university library. +4 tech.`, 'good');
+  } else if (p.perk === 'clout') {
+    addStat(s, 'clout', 8);
+    log(s, `${p.name} featured you in a video. Your phone won't stop buzzing. +8 clout.`, 'good');
+  } else if (p.perk === 'food') {
+    s.today.ate = true;
+    addStat(s, 'energy', 15);
+    log(s, `${p.name} shared a meal with you. +15 energy.`, 'good');
+  }
+}
+
+const TEXTS = [
+  'Ça dit quoi? Long time no see.',
+  'Did you see the Éléphants last night? Too sweet!',
+  'Come to the maquis on Saturday, everybody will be there.',
+  'Courage with the hustle, Babi is hard but we are strong.',
+  'I heard rice prices are going up. Stock up!',
+  'Happy Sunday! God bless.',
+];
+
+function friendMessages(s) {
+  for (const [id, p] of Object.entries(s.people)) {
+    if (p.rel >= 45 && rand(s) < 0.12) {
+      s.messages.unshift({ from: id, day: s.day, text: TEXTS[Math.floor(rand(s) * TEXTS.length)], read: false });
+    }
+  }
+  s.messages.length = Math.min(s.messages.length, 40);
+}
+
+export const unreadCount = (s) => s.messages.filter((m) => !m.read).length;
+
+export function readMessages(s) {
+  for (const m of s.messages) m.read = true;
+}
+
+// ---------- businesses and staff ----------
+
+export function businessList(s) {
+  return Object.entries(BUSINESSES).map(([id, b]) => {
+    const owned = s.businesses[id] ?? 0;
+    const blocked = owned >= b.max ? `You own the maximum (${b.max})` : b.price > s.cash ? 'Not enough cash' : null;
+    return { id, ...b, owned, blocked };
+  });
+}
+
+export function buyBusiness(s, id) {
+  const b = businessList(s).find((x) => x.id === id);
+  if (!b || b.blocked || !s.items.smartphone) return false;
+  s.cash -= b.price;
+  s.businesses[id] = b.owned + 1;
+  addStat(s, 'clout', 5);
+  log(s, `You bought a ${b.name.toLowerCase()} for ${cfa(b.price)}. Money will come in every night.`, 'good');
+  updateGoals(s);
+  return true;
+}
+
+function businessIncome(s) {
+  let total = 0;
+  const notes = [];
+  const weekend = [5, 6].includes(dateOf(s.day).getUTCDay());
+  for (const [id, b] of Object.entries(BUSINESSES)) {
+    for (let i = 0; i < (s.businesses[id] ?? 0); i++) {
+      if (b.breakdown && rand(s) < b.breakdown) {
+        total -= b.repair;
+        notes.push(`a ${id} broke down (repairs ${cfa(b.repair)})`);
+        continue;
+      }
+      total += Math.round((b.income[0] + rand(s) * (b.income[1] - b.income[0])) * (weekend && b.weekend ? b.weekend : 1));
+    }
+  }
+  if (!notes.length && !total) return;
+  s.cash = Math.max(0, s.cash + total);
+  log(s, `Business takings today: ${cfa(total)}${notes.length ? `; ${notes.join(', ')}` : ''}.`, total >= 0 ? 'good' : 'bad');
+}
+
+export function staffList(s) {
+  return Object.entries(STAFF).map(([id, st]) => ({ id, ...st, hired: s.staff[id],
+    blocked: !s.home ? 'You need a home first' : null }));
+}
+
+export function setStaff(s, id, hire) {
+  const st = staffList(s).find((x) => x.id === id);
+  if (!st || (hire && st.blocked)) return false;
+  s.staff[id] = hire;
+  log(s, hire ? `You hired a ${st.name.toLowerCase()} for ${cfa(st.wage)} a week, paid on Saturdays.` : `You let your ${st.name.toLowerCase()} go.`);
+  return true;
+}
+
+function payStaff(s) {
+  for (const [id, st] of Object.entries(STAFF)) {
+    if (!s.staff[id]) continue;
+    if (!s.home || s.cash < st.wage) {
+      s.staff[id] = false;
+      log(s, `You couldn't pay your ${st.name.toLowerCase()}, so they left.`, 'bad');
+    } else {
+      s.cash -= st.wage;
+      log(s, `Paid your ${st.name.toLowerCase()} ${cfa(st.wage)} for the week.`);
+    }
+  }
+}
+
+// The Babi rich list. The others' fortunes are fixed; yours is live.
+const RICH = [
+  ['Hermann', 'Cocoa exports', 450000000], ['Grace', 'Fintech', 120000000], ['Nadia', 'Influencer', 35000000],
+  ['Monsieur Seydou', 'Banking', 25000000], ['Yao "Le Boss"', 'Gbaka fleet', 8000000], ['Tantie Awa', 'Pagne trade', 3000000],
+];
+
+export function richList(s) {
+  return [...RICH.map(([name, source, worth]) => ({ name, source, worth })), { name: `${s.name} (you)`, source: 'The hustle', worth: netWorth(s), you: true }]
+    .sort((a, b) => b.worth - a.worth);
 }

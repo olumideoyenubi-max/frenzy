@@ -253,3 +253,101 @@ test('reaching the landlord dream wins', () => {
   G.act(s, 'eat');
   assert.equal(s.ending?.kind, 'win');
 });
+
+test('you meet people where and when they are around', () => {
+  const s = fresh();
+  s.area = 'adjame';
+  s.hour = 10;
+  assert.deepEqual(G.peopleHere(s).map((p) => p.id).sort(), ['awa', 'ibrahim']);
+  s.hour = 21;
+  assert.equal(G.peopleHere(s).length, 0);
+});
+
+test('talking builds a bond, once per kind per day', () => {
+  const s = fresh();
+  s.area = 'adjame';
+  s.hour = 10;
+  assert.ok(G.socialize(s, 'awa', 'hello'));
+  assert.equal(G.relation(s, 'awa'), 10);
+  assert.equal(G.socialize(s, 'awa', 'hello'), false);
+  assert.equal(G.socialize(s, 'awa', 'gist'), false, 'gist needs 15');
+  assert.ok(G.socialize(s, 'awa', 'compliment'));
+  assert.ok(G.socialize(s, 'awa', 'gist'));
+  assert.equal(G.levelName(G.relation(s, 'awa')), 'Acquaintance');
+});
+
+test('a friend at the bank gets you hired without the charm requirement', () => {
+  const s = fresh();
+  s.items.smartphone = true;
+  s.area = 'plateau';
+  s.hour = 10;
+  assert.match(G.jobsHere(s).find((j) => j.id === 'bank').blocked, /charm/);
+  s.people.seydou = { rel: 50 };
+  assert.equal(G.jobsHere(s).find((j) => j.id === 'bank').blocked, null);
+});
+
+test('friends do favours, with a cooldown', () => {
+  const s = fresh();
+  s.area = 'abobo';
+  s.hour = 10;
+  s.people.yao = { rel: 60 };
+  const before = s.cash;
+  assert.ok(G.socialize(s, 'yao', 'favour'));
+  assert.equal(s.cash, before + 20000);
+  s.today.talked = {};
+  assert.match(G.socialOptions(s, 'yao').find((o) => o.id === 'favour').blocked, /later/);
+});
+
+test('businesses pay out every night', () => {
+  const s = fresh();
+  s.items.smartphone = true;
+  s.cash = 3_000_000;
+  assert.ok(G.buyBusiness(s, 'gbaka'));
+  s.today.ate = true;
+  const before = s.cash;
+  G.sleep(s);
+  assert.notEqual(s.cash, before);
+  assert.ok(s.log.some((l) => l.text.startsWith('Business takings')));
+});
+
+test('staff wages are paid on Saturday, and unpaid staff leave', () => {
+  const s = fresh();
+  G.setStaff(s, 'help', true);
+  G.setStaff(s, 'cook', true);
+  s.cash = 25000;
+  while (G.dateLabel(s.day).slice(0, 3) !== 'Sat') { s.pendingEvent = null; s.today.ate = true; s.health = 100; s.cash = 25000; G.sleep(s); }
+  s.pendingEvent = null;
+  s.today.ate = true;
+  G.sleep(s);
+  assert.equal(s.staff.help, true);
+  assert.equal(s.staff.cook, false, 'not enough left for the cook');
+});
+
+test('at-home activities can be done once a day', () => {
+  const s = fresh();
+  assert.ok(G.actions(s).some((a) => a.id === 'callmaman' && !a.blocked));
+  G.act(s, 'callmaman');
+  assert.equal(G.actions(s).find((a) => a.id === 'callmaman').blocked, 'Already done today');
+});
+
+test('version 2 saves are upgraded', () => {
+  const old = G.newGame(1);
+  old.version = 2;
+  delete old.people; delete old.messages; delete old.businesses; delete old.staff; delete old.favours;
+  delete old.today.talked; delete old.today.homeDone;
+  const s = G.migrate(old);
+  assert.equal(s.version, 3);
+  assert.deepEqual(s.businesses, { gbaka: 0, maquis: 0 });
+  assert.equal(G.migrate({ version: 1 }), null);
+});
+
+test('the padi dream needs four close friends', () => {
+  const s = G.newGame(2, { dream: 'padi' });
+  s.pendingEvent = null;
+  for (const id of ['awa', 'yao', 'koffi']) s.people[id] = { rel: 85 };
+  s.area = 'adjame';
+  s.hour = 10;
+  s.people.ibrahim = { rel: 78 };
+  G.socialize(s, 'ibrahim', 'hello');
+  assert.equal(s.ending?.kind, 'win');
+});
