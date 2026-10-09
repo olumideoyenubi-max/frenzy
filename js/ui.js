@@ -6,7 +6,9 @@ import * as G from './engine.js';
 const SAVE_KEY = 'babi-frenzy-save-v1';
 const $ = (sel) => document.querySelector(sel);
 const modal = $('#modal');
-let s = load() ?? G.newGame();
+let s = window.claude?.hot?.data?.state ?? load() ?? G.newGame();
+// Keeps the game going when an embedded viewer reloads the page.
+window.claude?.hot?.snapshot?.(() => ({ state: s }));
 
 function load() {
   try {
@@ -353,13 +355,25 @@ function openHelp() {
     <p class="sub">Your game saves automatically in this browser.</p></div>`);
 }
 
-$('#btn-sleep').addEventListener('click', () => {
-  if (!G.canSleepAtHome(s) && !confirm(s.home ? 'You are not at home. Sleep rough here? You may get robbed.' : 'You are homeless. Sleep on a bench?')) return;
+// Asks inside the page, since embedded viewers block window.confirm().
+function askFirst(title, text, yesLabel, onYes) {
+  showModal(title, `<p class="event-text">${esc(text)}</p>
+    <div class="stack"><button class="primary" data-yes>${esc(yesLabel)}</button><button data-no>Cancel</button></div>`);
+  wire('[data-yes]', () => { modal.close(); onYes(); });
+  wire('[data-no]', () => modal.close());
+}
+
+function sleepNow() {
   G.sleep(s);
   render();
+}
+
+$('#btn-sleep').addEventListener('click', () => {
+  if (G.canSleepAtHome(s)) sleepNow();
+  else askFirst('Sleep rough?', s.home ? 'You are not at home. If you sleep here you may get robbed.' : 'You are homeless. Sleep on a bench tonight?', 'Sleep here', sleepNow);
 });
 $('#btn-new').addEventListener('click', () => {
-  if (confirm('Start a new game? Your current progress will be lost.')) { s = G.newGame(); if (modal.open) modal.close(); render(); }
+  askFirst('Start a new game?', 'Your current progress will be lost.', 'Start over', () => { s = G.newGame(); render(); });
 });
 $('#btn-help').addEventListener('click', openHelp);
 
