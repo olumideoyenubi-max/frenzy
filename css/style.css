@@ -782,3 +782,73 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.5); }
   .gauge { width: 2.25rem; height: 2.25rem; }
   .leave { bottom: calc(env(safe-area-inset-bottom, 0px) + 190px); }
 }
+
+/* ---------- colour pass ---------- */
+
+/* Skies behind the scene follow the clock. */
+.stage { background: radial-gradient(ellipse at 50% 15%, #e3f4ff 0%, #bfe3f2 35%, #a9d79c 100%); }
+.stage[data-time="morning"] { background: radial-gradient(ellipse at 30% 10%, #ffe7c2 0%, #ffd0a8 35%, #b9d99a 100%); }
+.stage[data-time="evening"] { background: radial-gradient(ellipse at 70% 10%, #ffc48a 0%, #ff8f7a 40%, #7d5a8c 100%); }
+.stage[data-time="night"] { background: radial-gradient(ellipse at 50% 10%, #3a4a8a 0%, #1f2650 45%, #0d1129 100%); }
+
+/* Need gauges each have their own colour; low ones turn red and pulse. */
+.gauge .g-track { fill: var(--panel); stroke: color-mix(in srgb, var(--c) 18%, var(--chip)); }
+.gauge.ok .g-fill, .gauge.mid .g-fill { stroke: var(--c); }
+.gauge.low .g-fill { stroke: var(--red); }
+.gauge .g-ic { filter: saturate(1.2); }
+
+/* Glassy HUD pills with a warm edge. */
+.me, .status, .wallet, .round, .meters, .place, .hint, .leave {
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.coin { background: linear-gradient(145deg, #ffe27a, #f2b705 55%, #c98a00); box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.18); }
+.place { border-left: 4px solid var(--accent); }
+
+/* The Do button is a glossy gradient; the active tab gets a soft gradient pill. */
+.tabbar .do {
+  background: radial-gradient(circle at 35% 30%, #ffd08a 0%, var(--accent) 45%, #d9480f 100%);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+:root[data-city="dakar"] .tabbar .do { background: radial-gradient(circle at 35% 30%, #fff3a6 0%, var(--accent) 45%, #c98a00 100%); }
+.tabbar button.on {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 22%, var(--panel)), var(--accent-soft));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+/* Every sheet carries a thin wax-print stripe across the top. */
+dialog { overflow: auto; }
+.modal-inner { position: relative; padding-top: 1.45rem; }
+.modal-inner::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 7px;
+  background: repeating-linear-gradient(90deg, #f77f00 0 18px, #ffffff 18px 24px, #009e60 24px 42px, #e8b100 42px 48px, #c7362b 48px 66px, #ffffff 66px 72px);
+}
+:root[data-city="dakar"] .modal-inner::before {
+  background: repeating-linear-gradient(90deg, #00853f 0 18px, #fdef42 18px 30px, #e31b23 30px 48px, #ffffff 48px 54px);
+}
+
+/* Action cards take the colour of their category. */
+.card-act .ca-ic { background: color-mix(in srgb, var(--g, var(--accent)) 18%, var(--panel)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--g, var(--accent)) 30%, transparent); }
+.card-act:not(:disabled):hover { border-color: var(--g, var(--accent)); }
+.card-act { border-left: 4px solid color-mix(in srgb, var(--g, var(--accent)) 70%, transparent); }
+.seg.on { background: linear-gradient(135deg, var(--ink), color-mix(in srgb, var(--ink) 75%, var(--accent))); }
+
+/* Toasts get a coloured edge and a little icon. */
+.toast { border-left-width: 6px; }
+.toast.good::before { content: "✅ "; }
+.toast.bad::before { content: "⚠️ "; }
+
+/* The new-life setup screens feel more like a game's character creator. */
+.avatar-preview { background: radial-gradient(circle at 50% 30%, #fff3d6, var(--accent-soft) 60%, color-mix(in srgb, var(--accent) 30%, var(--accent-soft))); }
+.choice.on { background: linear-gradient(160deg, var(--accent-soft), color-mix(in srgb, var(--accent) 12%, var(--panel))); }
+.lottery-card { background: linear-gradient(160deg, var(--accent-soft), color-mix(in srgb, var(--accent) 25%, var(--panel))); }
+.primary { background: linear-gradient(180deg, color-mix(in srgb, var(--go) 80%, #ffffff), var(--go)); box-shadow: 0 3px 10px color-mix(in srgb, var(--go) 35%, transparent); }
+.primary:disabled { background: var(--chip); box-shadow: none; }
+@media (max-width: 700px) {
+  .place { width: max-content; max-width: calc(100% - 24px); }
+  .place b { display: block; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+}

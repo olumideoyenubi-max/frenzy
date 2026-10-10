@@ -261,7 +261,14 @@ export const MAP = {
 };
 
 // Sandy walls at home, and a blue-and-yellow car rapide on the street.
-export const SCENE = { wall: '#c98a4b', van: ['#f2c200', '#1f5fbf', '#2b3a4a'] };
+export const SCENE = {
+  wall: '#c98a4b',
+  van: ['#f2c200', '#1f5fbf', '#2b3a4a'],
+  // Yellow-and-black taxis, white Ndiaga Ndiaye minibuses and city traffic.
+  traffic: ['#f2c200', '#eeeeee', '#1f5fbf', '#c7362b'],
+  flag: ['#00853f', '#fdef42', '#e31b23'],
+  flagStar: '#00853f',
+};
 
 export const T = {
   coin: 'TerangaCoin',

@@ -306,7 +306,13 @@ export const MAP = {
 };
 
 // Colours for the 3D scenes.
-export const SCENE = { wall: '#c8553d', van: ['#e8e8e8', '#009e60', '#2b3a4a'] };
+export const SCENE = {
+  wall: '#c8553d',
+  van: ['#e8e8e8', '#009e60', '#2b3a4a'],
+  // Orange metered taxis, green woro-woros, a white car and a red one.
+  traffic: ['#f77f00', '#2e8b3e', '#e8e8e8', '#c7362b'],
+  flag: ['#f77f00', '#ffffff', '#009e60'],
+};
 
 // Everyday text, kept here so another city can tell its own story.
 export const T = {

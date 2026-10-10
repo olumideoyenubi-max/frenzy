@@ -104,9 +104,9 @@ function mood(v) {
   return '😞 Down';
 }
 
-function bar(label, value, cls = '') {
+function bar(label, value, cls = '', color = '') {
   const low = cls === '' && value < 25 ? ' low' : '';
-  return `<div class="bar"><span>${label}</span><div class="bar-track"><div class="bar-fill ${cls}${low}" style="width:${value}%"></div></div><span>${Math.round(value)}</span></div>`;
+  return `<div class="bar"><span>${label}</span><div class="bar-track"><div class="bar-fill ${cls}${low}" style="width:${value}%;${color && !low ? `background:${color}` : ''}"></div></div><span>${Math.round(value)}</span></div>`;
 }
 
 // ---------- shared pieces ----------
@@ -139,7 +139,8 @@ function chipsFor(desc = '') {
 
 // One tappable action card. `a` has id, label, desc and blocked.
 function actCard(a, attr = 'data-act', icon = ACT_ICON[a.id]) {
-  return `<button class="card-act" type="button" ${attr}="${a.id}" ${a.blocked ? 'disabled' : ''}>
+  const tint = GROUP_COLOR[a.group] ?? 'var(--accent)';
+  return `<button class="card-act" type="button" ${attr}="${a.id}" ${a.blocked ? 'disabled' : ''} style="--g:${tint}">
     <span class="ca-ic" aria-hidden="true">${icon ?? '✨'}</span>
     <span class="ca-body"><strong>${esc(a.label)}</strong>
       <span class="ca-chips">${chipsFor(a.desc)}</span>
@@ -149,11 +150,14 @@ function actCard(a, attr = 'data-act', icon = ACT_ICON[a.id]) {
 }
 
 // A circular gauge for the HUD.
-function gauge(icon, value, label) {
+const NEED_COLOR = { hunger: '#ff8a3d', energy: '#f2b705', hygiene: '#2fa9e8', bladder: '#8b5cf6', happiness: '#ff4f8b', social: '#22b573' };
+const GROUP_COLOR = { work: '#f77f00', home: '#2fa9e8', life: '#ff4f8b', learn: '#8b5cf6', money: '#22b573', do: '#f2b705' };
+
+function gauge(icon, value, label, color = 'var(--green)') {
   const r = 17;
   const c = 2 * Math.PI * r;
   const tone = value >= 50 ? 'ok' : value >= 25 ? 'mid' : 'low';
-  return `<div class="gauge ${tone}" title="${label} ${Math.round(value)}" data-label="${label}">
+  return `<div class="gauge ${tone}" title="${label} ${Math.round(value)}" data-label="${label}" style="--c:${color}">
     <svg viewBox="0 0 44 44" aria-hidden="true"><circle cx="22" cy="22" r="${r}" class="g-track"/>
       <circle cx="22" cy="22" r="${r}" class="g-fill" stroke-dasharray="${(value / 100) * c} ${c}" transform="rotate(-90 22 22)"/></svg>
     <span class="g-ic" aria-hidden="true">${icon}</span><span class="g-val">${Math.round(value)}</span>
@@ -178,7 +182,7 @@ function renderTop() {
     <span class="when"><b>${G.clock(s.hour)}</b><small>${esc(G.dateLabel(s.day).replace(/ \d{4}$/, ''))} · Day ${s.day}</small></span>
     ${s.today.strike ? '<span class="alert">🚐 Strike</span>' : ''}${s.today.flood ? '<span class="alert">🌧 Floods</span>' : ''}`;
   $('#wallet').innerHTML = `<span class="coin" aria-hidden="true">₣</span><span><b>${n(s.cash)}</b>${s.bank ? `<small>Bank ${n(s.bank)}</small>` : ''}</span>`;
-  $('#meters').innerHTML = G.NEEDS.map((nd) => gauge(nd.icon, s[nd.id], nd.label)).join('');
+  $('#meters').innerHTML = G.NEEDS.map((nd) => gauge(nd.icon, s[nd.id], nd.label, NEED_COLOR[nd.id])).join('');
   $('#meters').setAttribute('aria-label', G.NEEDS.map((nd) => `${nd.label} ${Math.round(s[nd.id])}`).join(', '));
   $('.stage').dataset.time = timeOfDay(s.hour);
 }
@@ -404,7 +408,7 @@ function openLife() {
       <div><div class="name">${esc(s.name)}</div><div class="sub">${mood(G.moodScore(s))} · Day ${s.day}</div>
       <div class="sub">${s.traits.map((id) => `${TRAITS[id].icon} ${esc(TRAITS[id].name)}`).join(' · ')}</div></div></div>
     <div class="life-grid">
-      <div class="bars">${G.NEEDS.map((nd) => bar(`${nd.icon} ${nd.label}`, s[nd.id])).join('')}
+      <div class="bars">${G.NEEDS.map((nd) => bar(`${nd.icon} ${nd.label}`, s[nd.id], '', NEED_COLOR[nd.id])).join('')}
         ${bar('❤️ Health', s.health)}${bar('⭐ Clout', s.clout, 'clout')}<div class="sub">Mood ${G.moodScore(s)}/100 · ${mood(G.moodScore(s))}</div></div>
       <div class="stack">
         <div><b>${n(s.cash)}</b> cash · bank ${n(s.bank)}${s.crypto > 0 ? ` · crypto ${n(G.cryptoValue(s))}` : ''}</div>

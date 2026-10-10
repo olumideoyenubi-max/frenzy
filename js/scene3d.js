@@ -316,9 +316,50 @@ function furniture(id, opts) {
   return g;
 }
 
+// ---------- decor ----------
+
+// Materials that glow at night (lit windows, street lamps). The stage turns them up after dark.
+const nightGlows = new Set();
+function glow(color, glowColor = color) {
+  const m = new THREE.MeshLambertMaterial({ color, emissive: glowColor, emissiveIntensity: 0 });
+  nightGlows.add(m);
+  return m;
+}
+
+function framedPicture(draw, w = 0.9, h = 0.7) {
+  const g = new THREE.Group();
+  g.add(box(w + 0.1, h + 0.1, 0.05, lambert('#3a2414'), 0, 0, 0));
+  const pic = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshLambertMaterial({ map: canvasTexture(128, 96, draw) }));
+  pic.position.z = 0.03;
+  g.add(pic);
+  return g;
+}
+
+function pottedPlant(x, z, scale = 1) {
+  const g = new THREE.Group();
+  g.add(cyl(0.22, 0.16, 0.4, lambert('#b5562f'), 0, 0.2, 0, 12));
+  for (const [dx, dy, dz, r] of [[0, 0.62, 0, 0.26], [0.15, 0.78, 0.05, 0.18], [-0.14, 0.75, -0.06, 0.2], [0.02, 0.92, 0, 0.16]]) {
+    g.add(ball(r, lambert(['#2e8b3e', '#3fa34d', '#24733a'][Math.floor(dy * 10) % 3]), dx, dy, dz));
+  }
+  g.position.set(x, 0, z);
+  g.scale.setScalar(scale);
+  return g;
+}
+
+// A tiny person walking along the pavement; not interactive, just life.
+function passerby(i) {
+  const looks = [
+    { skin: '#7a4a2a', hair: 'foulard', outfit: '#c7362b', pattern: 'dots' },
+    { skin: '#4a2c1a', hair: 'short', outfit: '#1f5fbf', pattern: 'plain' },
+    { skin: '#a8693f', hair: 'afro', outfit: '#e8b100', pattern: 'kente' },
+    { skin: '#4a2c1a', hair: 'locks', outfit: '#009e60', pattern: 'stripes' },
+  ];
+  return makeCharacter(looks[i % looks.length]);
+}
+
 // ---------- the street ----------
 
-function streetProps(scene, area, colors = {}) {
+function streetProps(scene, area, colors = {}, anims = []) {
   const seed = [...area.id].reduce((n, c) => n + c.charCodeAt(0), 0);
   const rnd = (i) => ((Math.sin(seed * 9.1 + i * 7.7) + 1) / 2);
   const towers = area.style === 'towers';
@@ -330,13 +371,37 @@ function streetProps(scene, area, colors = {}) {
   while (x < 7) {
     const w = 1.8 + rnd(i) * 1.2;
     const h = towers ? 5 + rnd(i + 3) * 5 : posh ? 1.8 + rnd(i + 3) * 1.2 : 2 + rnd(i + 3) * 2;
-    const b = box(w - 0.15, h, 1.6, lambert(palette[i % palette.length]), x + w / 2, h / 2, -3.6);
+    const cx = x + w / 2;
+    const b = box(w - 0.15, h, 1.6, lambert(palette[i % palette.length]), cx, h / 2, -3.6);
     scene.add(b);
+    // A coloured band at the top and a darker plinth at the bottom.
+    scene.add(box(w - 0.1, 0.18, 1.65, lambert(awnings[(i + seed + 2) % awnings.length]), cx, h - 0.09, -3.6));
+    scene.add(box(w - 0.1, 0.35, 1.62, lambert('#8a7a66'), cx, 0.17, -3.6));
     if (!towers) {
-      scene.add(box(w - 0.4, 0.08, 0.7, lambert(awnings[(i + seed) % awnings.length]), x + w / 2, 1.5, -2.55));
-      scene.add(box(0.5, 0.9, 0.05, lambert('#5a3a22'), x + w / 2, 0.45, -2.78));
+      scene.add(box(w - 0.4, 0.08, 0.7, lambert(awnings[(i + seed) % awnings.length]), cx, 1.5, -2.55));
+      scene.add(box(0.5, 0.9, 0.05, lambert('#5a3a22'), cx, 0.45, -2.78));
+      // Upstairs windows that light up at night, and a shop sign.
+      for (let fy = 2.1; fy < h - 0.35; fy += 0.9) {
+        for (const dx of [-0.45, 0.45]) {
+          if (Math.abs(dx) > w / 2 - 0.4) continue;
+          scene.add(box(0.42, 0.5, 0.05, glow('#3b5566', '#ffcf7a'), cx + dx, fy, -2.78));
+          scene.add(box(0.5, 0.06, 0.12, lambert('#f4f1ea'), cx + dx, fy - 0.3, -2.74));
+        }
+      }
+      const shops = ['BOUTIQUE', 'COIFFURE', 'CABINE', 'PHARMACIE', 'ALIMENTATION', 'COUTURE', 'TELEPHONE'];
+      const shop = shops[(i + seed) % shops.length];
+      const sign = new THREE.Mesh(new THREE.PlaneGeometry(Math.min(1.6, w - 0.4), 0.32),
+        new THREE.MeshLambertMaterial({ map: signTexture(shop, shop === 'PHARMACIE' ? '#00a651' : awnings[(i + seed + 1) % awnings.length]) }));
+      sign.position.set(cx, 1.78, -2.77);
+      scene.add(sign);
+      if (h > 2.6) {
+        // A black water tank on the roof, as on so many West African roofs.
+        scene.add(cyl(0.28, 0.28, 0.55, lambert('#1d1b16'), cx + w / 4, h + 0.28, -3.9, 12));
+      }
+      if (rnd(i + 9) > 0.55) scene.add(box(0.5, 0.3, 0.25, lambert('#eeeeee'), cx - w / 4, 2.4, -2.72));
     } else {
-      for (let fy = 1; fy < h - 0.5; fy += 0.8) scene.add(box(w - 0.4, 0.05, 0.02, lambert('#dce9f2'), x + w / 2, fy, -2.79));
+      for (let fy = 1; fy < h - 0.5; fy += 0.8) scene.add(box(w - 0.4, 0.05, 0.02, lambert('#dce9f2'), cx, fy, -2.79));
+      for (let fy = 1.4; fy < h - 0.5; fy += 0.8) scene.add(box(w - 0.5, 0.45, 0.02, glow('#5f87a8', '#ffe2a0'), cx, fy, -2.8));
     }
     x += w;
     i += 1;
@@ -365,6 +430,20 @@ function streetProps(scene, area, colors = {}) {
       scene.add(leaf);
     }
   }
+  // Street lamps along the kerb, with sagging electric wires between them.
+  for (const lx of [-5.0, -0.4, 4.2]) {
+    scene.add(cyl(0.06, 0.08, 3.2, lambert('#4a4a4a'), lx, 1.6, 2.75, 8));
+    scene.add(box(0.7, 0.06, 0.08, lambert('#4a4a4a'), lx + 0.3, 3.15, 2.75));
+    scene.add(box(0.28, 0.1, 0.18, glow('#fff3c4', '#ffd27a'), lx + 0.55, 3.08, 2.75));
+  }
+  for (const [a, b] of [[-5.0, -0.4], [-0.4, 4.2]]) {
+    const wire = cyl(0.012, 0.012, b - a, lambert('#222222'), (a + b) / 2, 3.0, 2.75, 4);
+    wire.rotation.z = Math.PI / 2;
+    wire.castShadow = false;
+    scene.add(wire);
+  }
+  // Pots of flowers by the doors.
+  for (const fx of [-4.6, 0.9, 5.3]) scene.add(pottedPlant(fx, -2.4, 0.8));
   // A parked gbaka at the kerb.
   const van = new THREE.Group();
   const [body, stripe, glass] = colors.van ?? ['#e8e8e8', '#009e60', '#2b3a4a'];
@@ -378,6 +457,51 @@ function streetProps(scene, area, colors = {}) {
   }
   van.position.set(4.6, 0, 3.4);
   scene.add(van);
+  // Traffic driving past: taxis, minibuses and cars, looping along the road.
+  const traffic = colors.traffic ?? ['#f77f00', '#2e8b3e', '#e8e8e8', '#c7362b'];
+  traffic.forEach((c, k) => {
+    const car = new THREE.Group();
+    const long = k % 2 === 1;
+    car.add(box(long ? 2.6 : 1.9, 0.6, 1.0, lambert(c), 0, 0.5, 0));
+    car.add(box(long ? 2.0 : 1.1, 0.45, 0.95, lambert(long ? c : '#2b3a4a'), long ? 0 : -0.1, long ? 1.0 : 0.95, 0));
+    if (long) car.add(box(2.02, 0.25, 0.97, lambert('#2b3a4a'), 0, 1.05, 0));
+    for (const wx of [-0.6, 0.6]) for (const wz of [-0.48, 0.48]) {
+      const wheel = cyl(0.2, 0.2, 0.14, lambert('#1d1b16'), wx * (long ? 1.3 : 1), 0.2, wz);
+      wheel.rotation.x = Math.PI / 2;
+      car.add(wheel);
+    }
+    const lane = k % 2 ? 4.7 : 3.75;
+    const dir = k % 2 ? -1 : 1;
+    car.rotation.y = dir > 0 ? 0 : Math.PI;
+    scene.add(car);
+    const speed = 2.2 + k * 0.6;
+    const offset = k * 5;
+    anims.push((tt) => {
+      const span = 22;
+      const pos = ((tt * speed + offset) % span) - span / 2;
+      car.position.set(dir * pos, 0, lane);
+    });
+  });
+  // People walking along the far pavement.
+  for (let k = 0; k < 3; k++) {
+    const p = passerby(k + seed);
+    p.scale.setScalar(0.92);
+    const dir = k % 2 ? -1 : 1;
+    p.rotation.y = dir > 0 ? Math.PI / 2 : -Math.PI / 2;
+    scene.add(p);
+    const parts = p.userData.parts;
+    const speed = 0.9 + k * 0.25;
+    anims.push((tt) => {
+      const span = 18;
+      const pos = ((tt * speed + k * 6) % span) - span / 2;
+      p.position.set(dir * pos, 0, -2.05 - k * 0.12);
+      const swing = Math.sin(tt * 7 + k) * 0.5;
+      parts.legs[0].rotation.x = swing;
+      parts.legs[1].rotation.x = -swing;
+      parts.arms[0].rotation.x = -swing * 0.7;
+      parts.arms[1].rotation.x = swing * 0.7;
+    });
+  }
 }
 
 // ---------- places you can walk into ----------
@@ -629,10 +753,19 @@ export function createStage(container, handlers) {
     const sky = new THREE.HemisphereLight('#ffffff', '#8f7d60', 0.6);
     scene.add(sky);
     const sun = new THREE.DirectionalLight('#fff1d6', 0.65);
-    lights = { sky, sun };
+    // A soft fill from the other side keeps faces and fronts from going muddy.
+    const fill = new THREE.DirectionalLight('#cfe3ff', 0.22);
+    fill.position.set(-8, 6, -4);
+    scene.add(fill);
+    // A warm bulb that glows in the evening.
+    const lamp = new THREE.PointLight('#ffc070', 0, 14, 1.6);
+    lamp.position.set(0, 3.2, 0);
+    scene.add(lamp);
+    lights = { sky, sun, lamp, fill };
     sun.position.set(6, 12, 8);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(1024, 1024);
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.bias = -0.0005;
     Object.assign(sun.shadow.camera, { left: -10, right: 10, top: 10, bottom: -10 });
     scene.add(sun);
     applyTime();
@@ -643,6 +776,7 @@ export function createStage(container, handlers) {
     scene.add(floor);
     camera.position.set(11, 12, 11);
     camera.lookAt(0, 0.6, 0);
+    nightGlows.clear();
     props = [];
     anims = [];
     npcs = [];
@@ -671,6 +805,74 @@ export function createStage(container, handlers) {
 
   // ----- public: what to show -----
 
+  // Paint, curtains, pictures, a clock, a shelf, a rug and plants: the things that make a room feel lived in.
+  function decorateHome(cfg) {
+    const back = -ROOM.d / 2 + 0.01;
+    const left = -ROOM.w / 2 + 0.01;
+    const lower = lambert(new THREE.Color(cfg.scene?.wall ?? '#c8553d').multiplyScalar(0.72));
+    scene.add(box(ROOM.w, 0.9, 0.04, lower, 0, 0.45, back + 0.02), box(0.04, 0.9, ROOM.d, lower, left + 0.02, 0.45, 0));
+    scene.add(box(ROOM.w, 0.08, 0.06, lambert('#f1e3cf'), 0, 0.92, back + 0.03), box(0.06, 0.08, ROOM.d, lambert('#f1e3cf'), left + 0.03, 0.92, 0));
+    // A wax-print frieze along the top of the walls.
+    const frieze = new THREE.MeshLambertMaterial({ map: waxTexture('#009e60', 'kente') });
+    scene.add(box(ROOM.w, 0.22, 0.03, frieze, 0, 2.38, back + 0.02), box(0.03, 0.22, ROOM.d, frieze, left + 0.02, 2.38, 0));
+    // Curtains either side of the window, and daylight on the floor.
+    const curtain = new THREE.MeshLambertMaterial({ map: waxTexture('#f77f00', 'dots') });
+    scene.add(box(0.45, 1.5, 0.05, curtain, 1.0 - 1.15, 1.55, back + 0.06), box(0.45, 1.5, 0.05, curtain, 1.0 + 1.15, 1.55, back + 0.06));
+    scene.add(box(2.4, 0.08, 0.08, lambert('#5a3a22'), 1.0, 2.32, back + 0.06));
+    const shaft = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 2.2), new THREE.MeshBasicMaterial({ color: '#fff3c4', transparent: true, opacity: 0.16, depthWrite: false }));
+    shaft.rotation.x = -Math.PI / 2;
+    shaft.position.set(1.2, 0.02, back + 1.4);
+    scene.add(shaft);
+    anims.push(() => { shaft.visible = hour >= 7 && hour < 18; });
+    // Pictures: the national flag, and a family photo.
+    const [c1, c2, c3] = cfg.scene?.flag ?? ['#f77f00', '#ffffff', '#009e60'];
+    const flag = framedPicture((g, w, h) => {
+      g.fillStyle = c1; g.fillRect(0, 0, w / 3, h);
+      g.fillStyle = c2; g.fillRect(w / 3, 0, w / 3, h);
+      g.fillStyle = c3; g.fillRect(2 * w / 3, 0, w / 3, h);
+      if (cfg.scene?.flagStar) {
+        g.fillStyle = cfg.scene.flagStar;
+        g.beginPath();
+        for (let k = 0; k < 10; k++) {
+          const r = k % 2 ? 7 : 17;
+          const a = -Math.PI / 2 + k * Math.PI / 5;
+          g.lineTo(w / 2 + r * Math.cos(a), h / 2 + r * Math.sin(a));
+        }
+        g.fill();
+      }
+    });
+    flag.position.set(-1.6, 1.75, back + 0.04);
+    const family = framedPicture((g, w, h) => {
+      g.fillStyle = '#9fd3e8'; g.fillRect(0, 0, w, h);
+      g.fillStyle = '#e9c79f'; g.fillRect(0, h * 0.7, w, h * 0.3);
+      for (const [x, c, s] of [[30, '#c7362b', 1], [58, '#1f5fbf', 1.15], [88, '#e8b100', 0.85]]) {
+        g.fillStyle = c; g.fillRect(x - 10 * s, 50 - 6 * s, 20 * s, 40 * s);
+        g.fillStyle = '#7a4a2a'; g.beginPath(); g.arc(x, 38 - 6 * s, 9 * s, 0, Math.PI * 2); g.fill();
+      }
+    }, 0.75, 0.56);
+    family.position.set(3.3, 1.7, back + 0.04);
+    scene.add(flag, family);
+    // A wall clock and a shelf with a radio and a calabash on the left wall.
+    const clockFace = new THREE.Mesh(new THREE.CircleGeometry(0.28, 24), new THREE.MeshLambertMaterial({ map: canvasTexture(64, 64, (g) => {
+      g.fillStyle = '#ffffff'; g.beginPath(); g.arc(32, 32, 30, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = '#1d1b16'; g.lineWidth = 3; g.beginPath(); g.moveTo(32, 32); g.lineTo(32, 12); g.moveTo(32, 32); g.lineTo(46, 36); g.stroke();
+    }) }));
+    clockFace.rotation.y = Math.PI / 2;
+    clockFace.position.set(left + 0.04, 1.95, -0.4);
+    scene.add(clockFace, cyl(0.3, 0.3, 0.04, lambert('#c7362b'), left + 0.02, 1.95, -0.4, 24));
+    scene.children[scene.children.length - 1].rotation.z = Math.PI / 2;
+    scene.add(box(0.3, 0.05, 1.3, lambert('#8a5a36'), left + 0.15, 1.45, -1.6));
+    scene.add(box(0.22, 0.2, 0.36, lambert('#2b2b2b'), left + 0.15, 1.58, -1.95));
+    scene.add(ball(0.14, lambert('#c98a3a'), left + 0.15, 1.6, -1.35));
+    // A wax-print rug and some plants.
+    const rug = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 2.2), new THREE.MeshLambertMaterial({ map: waxTexture('#7b3fa0', 'kente') }));
+    rug.rotation.x = -Math.PI / 2;
+    rug.position.set(-0.4, 0.015, 0.6);
+    rug.receiveShadow = true;
+    scene.add(rug);
+    scene.add(pottedPlant(-4.4, 0.4), pottedPlant(4.6, -2.2, 0.8), pottedPlant(-4.4, 3.4, 1.1));
+  }
+
   function showHome(cfg) {
     const k = JSON.stringify(['home', cfg.items, cfg.look]);
     if (k === key) return;
@@ -680,7 +882,7 @@ export function createStage(container, handlers) {
     sceneKind = 'home';
     fit = { w: 14, h: 10.5 };
     bounds = { x: [-4.5, 4.6], z: [-3.3, 3.6] };
-    baseScene(['#e2c9a0', '#cfb184'], [ROOM.w, ROOM.d]);
+    baseScene(['#e8c08a', '#c9955c'], [ROOM.w, ROOM.d]);
     const wallMat = lambert(cfg.scene?.wall ?? '#c8553d');
     const trim = lambert('#f1e3cf');
     scene.add(box(ROOM.w + 0.25, 2.6, 0.25, wallMat, 0, 1.3, -ROOM.d / 2 - 0.12));
@@ -692,6 +894,7 @@ export function createStage(container, handlers) {
     for (let i = -2; i <= 2; i++) scene.add(box(0.05, 1.1, 0.08, lambert('#3a3a3a'), 1.0 + i * 0.36, 1.6, -ROOM.d / 2 + 0.05));
     scene.add(box(0.06, 2.0, 1.1, lambert('#6e4426'), -ROOM.w / 2 + 0.02, 1.0, 1.6));
     scene.add(box(0.08, 0.08, 0.08, lambert('#f77f00'), -ROOM.w / 2 + 0.08, 1.0, 1.2));
+    decorateHome(cfg);
     // Furniture.
     for (const id of cfg.items) {
       const spot = HOME_LAYOUT[id];
@@ -715,14 +918,14 @@ export function createStage(container, handlers) {
     key = k;
     fit = { w: 17, h: 11 };
     bounds = { x: [-6.5, 6.5], z: [-2.2, 2.6] };
-    baseScene(['#cdbd9c', '#bfae8a'], [16, 6]);
+    baseScene(['#d9c7a2', '#c4ab80'], [16, 6]);
     floor.position.z = 0;
     const road = box(16, 0.02, 2.4, lambert('#45464d'), 0, 0.01, 4.2);
     road.receiveShadow = true;
     scene.add(road);
     for (let x = -7; x < 8; x += 2) scene.add(box(1, 0.03, 0.12, lambert('#f5f1e6'), x, 0.03, 4.2));
     scene.add(box(16, 0.18, 0.2, lambert('#bdb3a0'), 0, 0.09, 3.0));
-    streetProps(scene, cfg.area, cfg.scene);
+    streetProps(scene, cfg.area, cfg.scene, anims);
     layout = {};
     sceneKind = 'street';
     // Doors into the places you can visit here.
@@ -804,6 +1007,10 @@ export function createStage(container, handlers) {
     lights.sun.color.set(sunC);
     lights.sun.intensity = sunI;
     lights.sun.position.set(...pos);
+    const night = hour >= 19.5 || hour < 6.5 ? 1 : hour >= 17.5 ? 0.45 : 0;
+    lights.fill.intensity = 0.22 * (1 - night * 0.7);
+    lights.lamp.intensity = night * 1.1;
+    for (const m of nightGlows) m.emissiveIntensity = night * 1.2;
   }
   function setTime(h) {
     if (h === hour) return;
