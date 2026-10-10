@@ -3,6 +3,26 @@
 A life-sim browser game set in Abidjan, Côte d'Ivoire. You arrive in Babi with 25,000 FCFA and a room in a
 cour commune in Yopougon. Hustle, trade, learn and party your way to **a villa in Riviera Golf**, or save enough to **move abroad**.
 
+## Two cities
+
+The same game engine runs two cities:
+
+| Game | Page | City pack |
+| --- | --- | --- |
+| **Babi Frenzy** · Abidjan, Côte d'Ivoire | `index.html` | `js/cities/abidjan.js` |
+| **Dakar Frenzy** · Dakar, Senegal | `dakar.html` | `js/cities/dakar.js` |
+
+**Dakar Frenzy** starts you in a family house in Parcelles Assainies (or the UCAD residence, or your aunt's mat in Pikine)
+and your dream can be a villa in Les Almadies. Get around by car rapide, Ndiaga Ndiaye minibus, the BRT, the TER train,
+Jakarta moto-taxi or a yellow-and-black taxi. Sell café Touba in traffic, eat thiéboudienne and fataya with dibi, trade
+thiof from Yoff, onions from Pikine and bazin from Médina, dance at a sabar night, play navétanes football, train with
+wrestlers on the beach and befriend Adja Fatou, DJ Babacar, Lamine the fisherman and more. SENELEC cuts the power, the
+lottery is LONASE, and the interface uses Senegal's gold.
+
+A city pack holds everything that makes a city: neighbourhoods and map, transport, jobs, goods, housing, people, events
+and all the everyday text. `js/data.js` picks the pack a page asks for with `globalThis.FRENZY_CITY`.
+To add a city, copy a pack, change it, register it in `js/data.js` and add a page like `dakar.html`.
+
 ## Look and feel
 
 The game fills the screen like a mobile game. A 3D isometric scene sits in the middle (your room, or the street of the
@@ -46,7 +66,7 @@ Each piece has a real effect on sleep, meals, learning or mood, and it moves wit
 ## Play
 
 ```bash
-npm start          # http://localhost:8080
+npm start          # Babi Frenzy: http://localhost:8080 · Dakar Frenzy: http://localhost:8080/dakar.html
 ```
 
 No install or build step. It's plain HTML, CSS and JavaScript modules, so any static host works, including GitHub Pages.
@@ -74,11 +94,13 @@ The game saves automatically in your browser.
 
 | File | What it does |
 | --- | --- |
-| `js/data.js` | Communes, transport, jobs, goods, housing and items |
+| `js/data.js` | Picks the city pack for the page |
+| `js/cities/*.js` | City packs: places, transport, jobs, goods, housing, people and text |
 | `js/engine.js` | All game rules. Pure functions with no DOM and a seeded RNG |
 | `js/ui.js` | Interface, the SVG map, dialogs and the 2D fallback scenes |
 | `js/scene3d.js` | The three.js stage: characters, the room, the street, walking and poses |
 | `test/engine.test.js` | Rule tests plus a long random-play stress test |
+| `test/city-*.test.js` | Checks each city pack is complete, then plays long random games in it |
 
 ```bash
 npm test

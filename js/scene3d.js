@@ -292,11 +292,11 @@ function furniture(id, opts) {
 
 // ---------- the street ----------
 
-function streetProps(scene, area) {
+function streetProps(scene, area, colors = {}) {
   const seed = [...area.id].reduce((n, c) => n + c.charCodeAt(0), 0);
   const rnd = (i) => ((Math.sin(seed * 9.1 + i * 7.7) + 1) / 2);
-  const posh = area.price >= 1.3;
-  const towers = area.id === 'plateau';
+  const towers = area.style === 'towers';
+  const posh = area.style === 'posh' || area.price >= 1.3;
   const palette = towers ? ['#7fa9c9', '#a7c4d8', '#5f87a8'] : posh ? ['#f4f1ea', '#e8e1d2', '#f2e6c9'] : ['#e3b98a', '#d9d2c3', '#c9a07a', '#e7c5b5', '#b9cfe0'];
   const awnings = ['#f77f00', '#009e60', '#c7362b', '#1f5fbf', '#e8b100'];
   let x = -7;
@@ -341,9 +341,10 @@ function streetProps(scene, area) {
   }
   // A parked gbaka at the kerb.
   const van = new THREE.Group();
-  van.add(box(3.0, 1.3, 1.4, lambert('#e8e8e8'), 0, 0.95, 0));
-  van.add(box(3.02, 0.35, 1.42, lambert('#009e60'), 0, 0.55, 0));
-  van.add(box(2.4, 0.45, 1.44, lambert('#2b3a4a'), -0.2, 1.25, 0));
+  const [body, stripe, glass] = colors.van ?? ['#e8e8e8', '#009e60', '#2b3a4a'];
+  van.add(box(3.0, 1.3, 1.4, lambert(body), 0, 0.95, 0));
+  van.add(box(3.02, 0.35, 1.42, lambert(stripe), 0, 0.55, 0));
+  van.add(box(2.4, 0.45, 1.44, lambert(glass), -0.2, 1.25, 0));
   for (const wx of [-1.0, 1.0]) for (const wz of [-0.7, 0.7]) {
     const wheel = cyl(0.3, 0.3, 0.2, lambert('#1d1b16'), wx, 0.3, wz);
     wheel.rotation.x = Math.PI / 2;
@@ -455,7 +456,7 @@ export function createStage(container, handlers) {
     fit = { w: 14, h: 10.5 };
     bounds = { x: [-4.5, 4.6], z: [-3.3, 3.6] };
     baseScene(['#e2c9a0', '#cfb184'], [ROOM.w, ROOM.d]);
-    const wallMat = lambert('#c8553d');
+    const wallMat = lambert(cfg.scene?.wall ?? '#c8553d');
     const trim = lambert('#f1e3cf');
     scene.add(box(ROOM.w + 0.25, 2.6, 0.25, wallMat, 0, 1.3, -ROOM.d / 2 - 0.12));
     scene.add(box(0.25, 2.6, ROOM.d, wallMat, -ROOM.w / 2 - 0.12, 1.3, 0));
@@ -496,7 +497,7 @@ export function createStage(container, handlers) {
     scene.add(road);
     for (let x = -7; x < 8; x += 2) scene.add(box(1, 0.03, 0.12, lambert('#f5f1e6'), x, 0.03, 4.2));
     scene.add(box(16, 0.18, 0.2, lambert('#bdb3a0'), 0, 0.09, 3.0));
-    streetProps(scene, cfg.area);
+    streetProps(scene, cfg.area, cfg.scene);
     const spots = [[-3.0, 0.4], [-0.6, 1.3], [1.8, 0.2], [4.0, 1.2]];
     cfg.people.forEach((p, i) => {
       const npc = makeCharacter(p.look);

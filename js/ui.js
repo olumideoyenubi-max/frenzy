@@ -2,13 +2,15 @@
 
 import {
   AREAS, ROADS, GOODS, MARKETS, JOBS, HOUSES, MOVE_IN_MONTHS, JAPA,
-  TRAITS, DREAMS, BACKGROUNDS, STARTS, AVATAR, FURNITURE, PEOPLE, STREET_LINES,
+  TRAITS, DREAMS, BACKGROUNDS, STARTS, AVATAR, FURNITURE, PEOPLE, STREET_LINES, TRANSPORT, BRAND, MAP, SCENE, T, HELP, SHOP_AREA, CITY_ID,
 } from './data.js';
 import * as G from './engine.js';
 import { has3D, createStage } from './scene3d.js';
 
-const SAVE_KEY = 'babi-frenzy-save-v2';
+const SAVE_KEY = BRAND.saveKey;
 const $ = (sel) => document.querySelector(sel);
+// Lets the stylesheet give each city its own colours.
+document.documentElement.dataset.city = CITY_ID;
 const modal = $('#modal');
 const hotState = window.claude?.hot?.data?.state;
 const saved = G.migrate(hotState) ?? load();
@@ -222,7 +224,7 @@ function renderStage() {
   const msg = $('#stage-msg');
   msg.hidden = true;
   if (view === 'map') {
-    $('#place').innerHTML = '<b>🗺️ Abidjan</b><small>Tap a commune to travel there</small>';
+    $('#place').innerHTML = `<b>🗺️ ${esc(BRAND.cityName)}</b><small>Tap a neighbourhood to travel there</small>`;
     $('#hint').hidden = true;
     return;
   }
@@ -245,9 +247,9 @@ function renderStage() {
     $('#stage2d').hidden = true;
     if (view === 'home' && atHome) {
       const owned = Object.keys(FURNITURE).filter((id) => G.owns(s, id) && id !== 'mattress' && id !== 'net');
-      stage.showHome({ items: [...BASE_OBJECTS, ...owned], mattress: G.owns(s, 'mattress'), net: G.owns(s, 'net'), look: s.avatar });
+      stage.showHome({ items: [...BASE_OBJECTS, ...owned], mattress: G.owns(s, 'mattress'), net: G.owns(s, 'net'), look: s.avatar, scene: SCENE });
     } else if (view === 'street') {
-      stage.showStreet({ area: { id: s.area, ...AREAS[s.area] }, look: s.avatar,
+      stage.showStreet({ area: { id: s.area, ...AREAS[s.area] }, look: s.avatar, scene: SCENE,
         people: G.peopleHere(s).map((p) => ({ id: p.id, name: p.name, level: p.level, look: p.look })) });
     }
   } else {
@@ -271,7 +273,7 @@ function renderMap() {
   const roads = ROADS.map(([a, b]) => `<line class="road" x1="${AREAS[a].x}" y1="${AREAS[a].y}" x2="${AREAS[b].x}" y2="${AREAS[b].y}"/>`).join('');
   const areas = Object.entries(AREAS).map(([id, a]) => {
     const cls = ['area', id === s.area ? 'here' : '', id === homeArea ? 'home' : ''].join(' ');
-    const labelBelow = a.y < 120 || ['adjame', 'portbouet'].includes(id) || id === s.area;
+    const labelBelow = a.y < 120 || MAP.labelBelow.includes(id) || id === s.area;
     const ty = labelBelow ? a.y + 28 : a.y - 18;
     return `<g class="${cls}" data-area="${id}" tabindex="0" role="button" aria-label="Travel to ${esc(a.name)}${id === s.area ? ' (you are here)' : ''}">
       <circle cx="${a.x}" cy="${a.y}" r="11"/>
@@ -280,11 +282,8 @@ function renderMap() {
     </g>`;
   }).join('');
   $('#map').innerHTML = `
-    <path class="land" d="M0 0 H640 V222 C590 232 540 228 470 222 C430 218 380 212 350 222 C340 245 305 250 282 236 C262 214 232 212 200 214 C150 218 100 206 0 208 Z"/>
-    <path class="land" d="M222 262 C250 250 300 252 360 258 C420 252 480 254 530 262 C542 288 522 314 470 318 C400 322 300 322 240 312 C220 300 214 280 222 262 Z"/>
-    <path class="land" d="M110 338 C250 330 450 332 640 334 V372 C450 370 250 372 110 372 C100 360 100 345 110 338 Z"/>
-    <text class="map-label" x="70" y="246">Ébrié Lagoon</text>
-    <text class="map-label" x="250" y="392">Atlantic Ocean</text>
+    ${MAP.land.map((d) => `<path class="land" d="${d}"/>`).join('')}
+    ${MAP.labels.map(([x, y, label]) => `<text class="map-label" x="${x}" y="${y}">${esc(label)}</text>`).join('')}
     ${roads}${areas}`;
   for (const g of document.querySelectorAll('.area')) {
     const go = () => openTravel(g.dataset.area);
@@ -464,7 +463,7 @@ const HOME_OBJECTS = {
   tv: { x: 318, y: 96, icon: '📺', label: 'TV', need: 'tv', acts: ['relax'] },
   speaker: { x: 214, y: 186, icon: '🔊', label: 'Speaker', need: 'speaker', acts: ['dance'] },
   sofa: { x: 268, y: 178, icon: '🛋️', label: 'Sofa', need: 'sofa', sit: true, acts: ['relax'] },
-  dog: { x: 150, y: 192, icon: '🐕', label: 'Drogba', need: 'dog', acts: ['playdog'] },
+  dog: { x: 150, y: 192, icon: '🐕', label: T.dogName, need: 'dog', acts: ['playdog'] },
   ac: { x: 100, y: 30, icon: '❄️', label: 'Air conditioner', need: 'ac' },
 };
 // What the avatar shows while doing each thing.
@@ -611,11 +610,11 @@ function openTravel(to) {
   });
 }
 
-const VEHICLE = { gbaka: '🚐', boat: '🛥️', woro: '🚕', moto: '🛵', taxi: '🚖', car: '🚗' };
+const VEHICLE = Object.fromEntries(Object.entries(TRANSPORT).map(([id, tr]) => [id, tr.icon ?? '🚌']));
 let streetTimer = 0;
 
 function showStreet(mode, to) {
-  const water = mode === 'boat';
+  const water = Boolean(TRANSPORT[mode].water);
   const blocks = Array.from({ length: 10 }, (_, i) => {
     const h = 40 + ((i * 37) % 60);
     const x = i * 100 + 10;
@@ -672,7 +671,7 @@ function openMarket() {
       </div>
     </div>`;
   }).join('');
-  showModal(MARKETS[s.area], `<p class="sub">Cash ${n(s.cash)} · carrying ${G.carried(s)}/${G.capacity(s)}. Prices change every day and differ across Abidjan. Your trade skill gets you better prices.</p>${rows}`);
+  showModal(MARKETS[s.area], `<p class="sub">Cash ${n(s.cash)} · carrying ${G.carried(s)}/${G.capacity(s)}. Prices change every day and differ across ${esc(BRAND.cityName)}. Your trade skill gets you better prices.</p>${rows}`);
   wire('[data-buy]', (el) => { G.buy(s, el.dataset.buy, +el.dataset.q); refresh(openMarket); });
   wire('[data-sell]', (el) => { G.sell(s, el.dataset.sell, +el.dataset.q); refresh(openMarket); });
 }
@@ -714,7 +713,7 @@ function openAgent() {
   const rows = G.housesHere(s).map((h) => `
     <div class="row">
       <div><strong>${esc(h.name)}</strong>
-        <div class="meta">${n(h.monthly)} a month · move-in total ${n(h.cost)} (2 months' advance, 2 months' deposit, 1 month agency fee)</div>
+        <div class="meta">${n(h.monthly)} a month · move-in total ${n(h.cost)} (${esc(T.moveIn)})</div>
         <div class="meta">Sleep +${h.sleep} energy · ${h.power === 0 ? 'Power never goes off' : `Power cuts on ${Math.round(h.power * 100)}% of nights`}</div>
         ${h.blocked ? `<div class="why">${esc(h.blocked)}</div>` : ''}
       </div>
@@ -722,7 +721,7 @@ function openAgent() {
     </div>`).join('');
   const others = Object.values(HOUSES).filter((h) => h.area !== s.area).map((h) => `${h.name} (${AREAS[h.area].name}, ${n(h.monthly)}/month)`);
   showModal('Housing agent', `<p class="sub">"It's ${MOVE_IN_MONTHS} months to move in, my friend: advance, deposit and my fee." Cash ${n(s.cash)}.</p>${rows}
-    <p class="sub">Other places in Abidjan: ${others.map(esc).join(' · ')}</p>`);
+    <p class="sub">Other places in ${esc(BRAND.cityName)}: ${others.map(esc).join(' · ')}</p>`);
   wire('[data-house]', (el) => { G.moveHouse(s, el.dataset.house); refresh(openAgent); });
 }
 
@@ -759,7 +758,7 @@ function openBank() {
 const APPS = [
   { id: 'messages', name: 'Messages', icon: '💬', basic: true },
   { id: 'contacts', name: 'Contacts', icon: '👥', basic: true },
-  { id: 'coin', name: 'BabiCoin', icon: '🪙' },
+  { id: 'coin', name: T.coin, icon: '🪙' },
   { id: 'rich', name: 'Rich list', icon: '👑' },
   { id: 'business', name: 'Business', icon: '🏪' },
   { id: 'staff', name: 'Staff', icon: '🧹' },
@@ -782,7 +781,7 @@ function openPhone(app = null) {
     showModal('Phone', phoneFrame(smart ? 'Smartphone' : 'Basic phone', `<div class="apps">${APPS.map((a) => {
       const locked = !a.basic && !smart;
       return `<button class="app" data-app="${a.id}" ${locked ? 'disabled' : ''}><span class="app-ic">${a.icon}</span>${esc(a.name)}${a.id === 'messages' && unread ? `<span class="badge">${unread}</span>` : ''}</button>`;
-    }).join('')}</div>${smart ? '' : '<p class="sub">Buy a smartphone at the Black Market in Adjamé to unlock more apps.</p>'}`, false));
+    }).join('')}</div>${smart ? '' : `<p class="sub">Buy a smartphone in ${esc(AREAS[SHOP_AREA].name)} to unlock more apps.</p>`}`, false));
     wire('[data-app]', (el) => openPhone(el.dataset.app));
     return;
   }
@@ -792,14 +791,14 @@ function openPhone(app = null) {
     G.readMessages(s);
     save();
     renderTabs();
-    view('Messages', list || '<p class="sub">No messages yet. Make friends around Babi and they will text you.</p>');
+    view('Messages', list || `<p class="sub">No messages yet. Make friends around ${esc(BRAND.city)} and they will text you.</p>`);
   } else if (app === 'contacts') {
     const known = Object.keys(s.people).sort((a, b) => G.relation(s, b) - G.relation(s, a));
     view('Contacts', known.length ? known.map((id) => `<div class="msg">${avatarSvg(PEOPLE[id].look, { width: 28, label: PEOPLE[id].name })}
       <div style="flex:1;min-width:0"><strong>${esc(PEOPLE[id].name)}</strong> <small class="sub">${esc(G.levelName(G.relation(s, id)))} · ${esc(AREAS[PEOPLE[id].area].name)}</small>${relBar(G.relation(s, id))}</div></div>`).join('')
       : '<p class="sub">No contacts yet. Say hello to people you meet around the city.</p>');
   } else if (app === 'coin') {
-    view('BabiCoin', `
+    view(T.coin, `
       <p>1 coin = <strong>${n(s.cryptoPrice)}</strong></p>
       <p>You hold ${s.crypto.toFixed(3)} coins, worth <strong>${n(G.cryptoValue(s))}</strong>. Cash ${n(s.cash)}.</p>
       <p class="sub">The price moves every night. It can fly, and it can crash. Don't put your rent money in.</p>
@@ -808,7 +807,7 @@ function openPhone(app = null) {
     wire('[data-cbuy]', () => { G.buyCrypto(s, Number($('#coin-amt').value) || 0); refresh(() => openPhone('coin')); });
     wire('[data-csell]', (el) => { G.sellCrypto(s, Number(el.dataset.csell)); refresh(() => openPhone('coin')); });
   } else if (app === 'rich') {
-    view('Babi rich list', `<ol class="rich">${G.richList(s).map((r) => `<li class="${r.you ? 'you' : ''}"><span><strong>${esc(r.name)}</strong><small class="sub"> · ${esc(r.source)}</small></span><span>${n(r.worth)}</span></li>`).join('')}</ol>`);
+    view(T.richTitle, `<ol class="rich">${G.richList(s).map((r) => `<li class="${r.you ? 'you' : ''}"><span><strong>${esc(r.name)}</strong><small class="sub"> · ${esc(r.source)}</small></span><span>${n(r.worth)}</span></li>`).join('')}</ol>`);
   } else if (app === 'business') {
     view('Business', `<p class="sub">Cash ${n(s.cash)}. Takings land in your cash every night.</p>${G.businessList(s).map((b) => `
       <div class="row"><div><strong>${b.icon} ${esc(b.name)}</strong><div class="meta">${n(b.price)} · earns ${n(b.income[0])}–${n(b.income[1])} a day · you own ${b.owned}</div>
@@ -841,25 +840,25 @@ function openEnding() {
     <div class="emoji">${emoji}</div>
     <h2 style="text-transform:none;letter-spacing:0;font-size:1.4rem;margin:.4rem 0">${esc(e.title)}</h2>
     <p>${esc(e.text)}</p>
-    <p class="sub">Days in Babi: ${s.day} · Best net worth: ${n(s.stats.maxNetWorth)} · Shifts worked: ${s.stats.shifts} · Viral skits: ${s.stats.viral}</p>
+    <p class="sub">Days in ${esc(BRAND.city)}: ${s.day} · Best net worth: ${n(s.stats.maxNetWorth)} · Shifts worked: ${s.stats.shifts} · Viral skits: ${s.stats.viral}</p>
     <button class="primary" data-again>Play again</button></div>`, { closable: false });
   wire('[data-again]', () => openSetup());
 }
 
 function openHelp() {
   showModal('How to play', `<div class="help">
-    <p>You arrive in Abidjan, Babi, with very little money. Your goal is the dream you picked: <strong>${esc(DREAMS[s.dream].blurb)}</strong></p>
+    <p>${esc(HELP.intro)} Your goal is the dream you picked: <strong>${esc(DREAMS[s.dream].blurb)}</strong></p>
     <h3>Each day</h3>
     <ul>
       <li>Every action takes time. The day runs from 06h00 to midnight.</li>
       <li><strong>Eat</strong> every day or your health drops. Sleep at <strong>home</strong> to get your energy back. Sleeping rough is risky.</li>
-      <li>Get around by gbaka, water bus, woro-woro, moto-taxi, taxi or your own car. Rush hours (07h–10h and 16h–20h) are slow.</li>
+      <li>${esc(HELP.transport)} Rush hours (07h–10h and 16h–20h) are slow.</li>
     </ul>
     <h3>Make money</h3>
     <ul>
-      <li>Sell water sachets in traffic, take jobs, shoot skits, audition for music videos in Treichville.</li>
-      <li>Trade: buy where things are cheap (plantain in Bingerville, attiéké in Yopougon, pagne and iPhones in Adjamé) and sell where they're dear (Cocody, Zone 4).</li>
-      <li>Learn tech in Cocody, haggling in Adjamé and charm at networking events in Plateau and Zone 4 to unlock better jobs.</li>
+      <li>${esc(HELP.work)}</li>
+      <li>${esc(HELP.trade)}</li>
+      <li>${esc(HELP.learn)}</li>
     </ul>
     <h3>Watch out</h3>
     <ul>
@@ -867,7 +866,7 @@ function openHelp() {
       <li>Furnish your home: a mattress, a fan or a stove make every night and meal better.</li>
       <li>Meet people around the city. Friends unlock perks: job referrals, loans, free meals and more.</li>
       <li>Your phone has messages from friends, a rich list, staff to hire and businesses to buy.</li>
-      <li>CIE sometimes cuts the power. A generator helps you sleep. Keep your savings in the bank, away from pickpockets.</li>
+      <li>${esc(HELP.power)} Keep your savings in the bank, away from pickpockets.</li>
       <li>If your health hits zero, it's game over. Moving abroad needs ${n(JAPA.proofOfFunds)} in proof of funds.</li>
     </ul>
     <p class="sub">Your game saves automatically in this browser.</p></div>`);

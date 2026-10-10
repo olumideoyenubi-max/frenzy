@@ -4,7 +4,7 @@
 import {
   AREAS, TRANSPORT, JOBS, GOODS, MARKETS, HOUSES, MOVE_IN_MONTHS, ADVANCE_DAYS, ITEMS, SHOP_AREA,
   JAPA, GEN_FUEL, CARRY, TRAITS, DREAMS, BACKGROUNDS, STARTS, AVATAR, FURNITURE,
-  PEOPLE, LEVELS, BUSINESSES, STAFF,
+  PEOPLE, LEVELS, BUSINESSES, STAFF, BRAND, DEFAULT_START, PLACES, RAINY_MONTHS, T, GIST, FRIEND_TEXTS, RICH,
 } from './data.js';
 
 const START_DATE = Date.UTC(2026, 0, 5); // Day 1 is Monday, 5 January 2026
@@ -12,25 +12,6 @@ const DAY_END = 24;
 const LOG_LIMIT = 120;
 const GRACE_DAYS = 7;
 
-// Where each kind of activity is available.
-const PLACES = {
-  bank: ['adjame', 'cocody', 'plateau', 'treichville', 'marcory', 'riviera', 'yopougon'],
-  hawk: ['abobo', 'adjame', 'yopougon', 'plateau', 'treichville', 'cocody'],
-  posh: ['plateau', 'marcory', 'riviera'],
-  alloco: ['cocody', 'yopougon', 'treichville', 'abobo'],
-  flood: ['cocody', 'abobo', 'yopougon'],
-  maquis: 'yopougon',
-  beach: 'portbouet',
-  club: 'marcory',
-  football: 'yopougon',
-  gym: 'treichville',
-  audition: 'treichville',
-  bootcamp: 'cocody',
-  haggle: 'adjame',
-  mixer: ['plateau', 'marcory'],
-  golf: 'riviera',
-};
-const RAINY_MONTHS = [4, 5, 6, 9, 10]; // May–July and October–November
 
 // ---------- helpers ----------
 
@@ -119,12 +100,12 @@ function fxPrice(item, s) {
 // ---------- new game and days ----------
 
 export const DEFAULT_SETUP = {
-  name: 'Kouassi',
+  name: BRAND.defaultName,
   avatar: { skin: AVATAR.skins[2], outfit: AVATAR.outfits[0], pattern: 'stripes', hair: 'short' },
   traits: [],
   dream: 'villa',
   background: null,
-  start: 'cour',
+  start: DEFAULT_START,
 };
 
 // Draws the birth lottery. Uses Math.random because it happens before the game's seeded RNG exists.
@@ -134,6 +115,8 @@ export function drawBackground(random = Math.random) {
   return (list.find(([, b]) => (r -= b.weight) < 0) ?? list[0])[0];
 }
 
+const noBusinesses = () => Object.fromEntries(Object.keys(BUSINESSES).map((id) => [id, 0]));
+
 // Brings an older save up to date. Returns null if it can't be used.
 export function migrate(saved) {
   if (!saved || typeof saved !== 'object') return null;
@@ -141,7 +124,7 @@ export function migrate(saved) {
     saved.people ??= {};
     saved.favours ??= {};
     saved.messages ??= [];
-    saved.businesses ??= { gbaka: 0, maquis: 0 };
+    saved.businesses ??= noBusinesses();
     saved.staff ??= { help: false, cook: false };
     saved.sleptHome ??= false;
     saved.today.talked ??= {};
@@ -153,7 +136,7 @@ export function migrate(saved) {
 
 export function newGame(seed = (Date.now() ^ (Math.random() * 1e9)) >>> 0, setup = {}) {
   const cfg = { ...DEFAULT_SETUP, ...setup };
-  const startHome = STARTS[cfg.start] ? cfg.start : 'cour';
+  const startHome = STARTS[cfg.start] ? cfg.start : DEFAULT_START;
   const home = HOUSES[startHome];
   const bg = BACKGROUNDS[cfg.background];
   const s = {
@@ -186,7 +169,7 @@ export function newGame(seed = (Date.now() ^ (Math.random() * 1e9)) >>> 0, setup
     people: {},
     favours: {},
     messages: [],
-    businesses: { gbaka: 0, maquis: 0 },
+    businesses: noBusinesses(),
     staff: { help: false, cook: false },
     sleptHome: false,
     inventory: {},
@@ -205,7 +188,7 @@ export function newGame(seed = (Date.now() ^ (Math.random() * 1e9)) >>> 0, setup
   if (hasTrait(s, 'talker')) s.skills.charm += 10;
   if (hasTrait(s, 'tech')) s.skills.tech += 10;
   s.stats.maxNetWorth = s.cash;
-  log(s, `Welcome to Babi, ${s.name}! You have ${cfa(s.cash)} and a ${home.name.toLowerCase()} in ${AREAS[home.area].name}. `
+  log(s, `${T.welcome(s.name)} You have ${cfa(s.cash)} and a ${home.name.toLowerCase()} in ${AREAS[home.area].name}. `
     + `Your dream: ${DREAMS[s.dream].name}.`
     + (home.monthly ? ` Rent of ${cfa(home.monthly)} is due on day 30.` : ' At least the rent is free.'), 'good');
   if (bg) log(s, `Birth lottery: ${bg.name}. ${bg.blurb}`);
@@ -233,11 +216,11 @@ function startDay(s) {
   friendMessages(s);
   if (rand(s) < 0.06) {
     s.today.strike = true;
-    log(s, 'Transport strike! Few gbakas are running and every fare has gone up.', 'bad');
+    log(s, T.strike, 'bad');
   }
   if (RAINY_MONTHS.includes(month(s.day)) && rand(s) < 0.2) {
     s.today.flood = true;
-    log(s, 'Heavy rain last night. Cocody, Abobo and Yopougon are flooded and traffic there is terrible.', 'bad');
+    log(s, T.flood, 'bad');
   }
   checkRent(s);
   if (!s.ending && rand(s) < 0.38) rollEvent(s);
@@ -274,7 +257,7 @@ export function sleep(s) {
     if (powerOut && s.items.generator && s.cash >= GEN_FUEL) {
       s.cash -= GEN_FUEL;
       powerOut = false;
-      log(s, `CIE cut the power, but your generator saved the night (${cfa(GEN_FUEL)} of fuel).`);
+      log(s, T.genSaved(cfa(GEN_FUEL)));
     }
     if (powerOut) {
       gain = Math.round(gain * (owns(s, 'fan') ? 0.85 : 0.7));
@@ -332,9 +315,8 @@ function checkGameOver(s) {
   if (s.health <= 0) {
     s.ending = {
       kind: 'hospital',
-      title: 'Babi wore you out',
-      text: 'You collapsed and woke up at the CHU in Treichville. The family has sent a bus ticket back to the village. '
-        + 'Ça va aller. Rest well, and Babi will still be here.',
+      title: T.hospital.title,
+      text: T.hospital.text,
     };
     log(s, 'Game over: your health ran out.', 'bad');
     return true;
@@ -365,9 +347,9 @@ export function travelOptions(s, to) {
   return Object.entries(TRANSPORT).map(([id, t]) => {
     let blocked = null;
     if (t.needs && !s.items[t.needs]) blocked = 'You do not own a car';
-    if (t.stops && !(t.stops.includes(from) && t.stops.includes(to))) blocked = 'No water bus on this route';
+    if (t.stops && !(t.stops.includes(from) && t.stops.includes(to))) blocked = t.offRoute ?? `The ${t.name} doesn't go there`;
     if (t.banned && (t.banned.includes(from) || t.banned.includes(to))) blocked = 'Moto-taxis are not allowed there';
-    const strike = s.today.strike && id !== 'boat' && id !== 'car' ? 1.6 : 1;
+    const strike = s.today.strike && !t.noStrike ? 1.6 : 1;
     const cost = roundTo((t.base + t.perKm * km) * strike, 25);
     const hours = Math.max(0.25, roundTo((km / t.speed) * (1 + (traffic - 1) * t.trafficHit), 0.25));
     const energy = Math.round(t.energyPerKm * km);
@@ -391,10 +373,10 @@ export function travel(s, to, mode) {
     + (opt.cost ? `, ${cfa(opt.cost)}` : '') + '.';
   let tone = 'info';
   if (opt.hours >= 2) text += ' The traffic was terrible!';
-  if (mode === 'gbaka' && s.cash > 0 && rand(s) < 0.06) {
+  if (TRANSPORT[mode].pickpockets && s.cash > 0 && rand(s) < 0.06) {
     const lost = Math.min(s.cash, 20000, Math.round(s.cash * (0.1 + rand(s) * 0.15)));
     s.cash -= lost;
-    text += ` A pickpocket in the gbaka took ${cfa(lost)}.`;
+    text += T.pickpocket(cfa(lost));
     tone = 'bad';
   }
   if (mode === 'moto' && rand(s) < 0.04) {
@@ -405,7 +387,7 @@ export function travel(s, to, mode) {
   if (mode === 'car' && rand(s) < 0.15) {
     const bribe = Math.min(s.cash, between(s, 4, 10) * 250);
     s.cash -= bribe;
-    text += ` Police check: "Chef, on dit quoi?" You left ${cfa(bribe)} "for coffee".`;
+    text += T.police(cfa(bribe));
     tone = 'bad';
   }
   log(s, text, tone);
@@ -481,14 +463,14 @@ export function actions(s) {
     add('jobs', 'Look for work here', `1h · ${openings.map((j) => j.title).join(', ')}`, { hours: 1, group: 'work' });
   }
   if (at(PLACES.hawk, a)) {
-    add('hawk', 'Sell cold water sachets in traffic', `3h · earn about ${hasTrait(s, 'hustler') ? '1,250–2,500' : '1,000–2,000'} FCFA · -20 energy`, { hours: 3, energy: 20, from: 7, until: 21, group: 'work' });
+    add('hawk', T.act.hawk, `3h · earn about ${hasTrait(s, 'hustler') ? '1,250–2,500' : '1,000–2,000'} FCFA · -20 energy`, { hours: 3, energy: 20, from: 7, until: 21, group: 'work' });
   }
   if (s.items.smartphone) {
-    add('skit', 'Shoot a comedy skit in Nouchi', '3h · +clout, small chance to go viral · -15 energy', { hours: 3, energy: 15, group: 'work' });
+    add('skit', T.act.skit, '3h · +clout, small chance to go viral · -15 energy', { hours: 3, energy: 15, group: 'work' });
   }
   if (at(PLACES.audition, a)) {
     const b = blockReason(s, { hours: 4, energy: 15, from: 9, until: 18 });
-    list.push({ id: 'audition', label: 'Audition for a coupé-décalé music video', desc: '4h · needs charm 20 · could pay well', hours: 4, cost: 0, group: 'work',
+    list.push({ id: 'audition', label: T.act.audition, desc: '4h · needs charm 20 · could pay well', hours: 4, cost: 0, group: 'work',
       blocked: b ?? (s.skills.charm < 20 ? 'Needs charm 20' : null) });
   }
 
@@ -498,13 +480,13 @@ export function actions(s) {
     add('eat_posh', 'Eat at a smart restaurant', `1.5h · ${cfa(cost)} · +25 energy, +10 vibes, +1 clout`, { hours: 1.5, cost, group: 'life' });
   } else {
     const cost = roundTo(600 * p, 50);
-    add('eat', 'Eat garba (attiéké and fried tuna)', `1h · ${cfa(cost)} · +20 energy, +4 health`, { hours: 1, cost, group: 'life' });
+    add('eat', T.act.eat, `1h · ${cfa(cost)} · +20 energy, +4 health`, { hours: 1, cost, group: 'life' });
   }
   if (at(PLACES.alloco, a)) {
-    add('alloco', 'Alloco and brochettes at the roadside grill', `1h · ${cfa(1500)} · +15 energy, +6 vibes`, { hours: 1, cost: 1500, from: 17, group: 'life' });
+    add('alloco', T.act.alloco, `1h · ${cfa(1500)} · +15 energy, +6 vibes`, { hours: 1, cost: 1500, from: 17, group: 'life' });
   }
   if (canSleepAtHome(s)) {
-    add('relax', owns(s, 'tv') ? 'Watch TV at home' : 'Watch an Ivorian series on your phone at home',
+    add('relax', owns(s, 'tv') ? 'Watch TV at home' : T.act.relaxPhone,
       `2h · +10 energy, +${owns(s, 'tv') ? 16 : 8} vibes`, { hours: 2, group: 'life' });
     if (owns(s, 'stove')) add('cook', 'Cook at home', `1h · ${cfa(300)} · +20 energy, +5 health`, { hours: 1, cost: 300, group: 'life' });
     const once = (id) => (s.today.homeDone.includes(id) ? 'Already done today' : null);
@@ -512,31 +494,31 @@ export function actions(s) {
     home('nap', 'Take a nap', '1h · +15 energy', { hours: 1 });
     home('liein', 'Stay in bed scrolling', '2h · +5 energy, +6 vibes', { hours: 2 });
     home('wash', 'Have a bucket bath', '30 min · +2 health, +3 vibes', { hours: 0.5 });
-    if (owns(s, 'dog')) home('playdog', 'Play with Drogba', '30 min · +5 vibes', { hours: 0.5 });
-    home('callmaman', 'Call Maman', '30 min · +8 vibes · she might send something', { hours: 0.5 });
-    home('dance', 'Dance to coupé-décalé', '1h · +6 vibes, +2 health · -5 energy', { hours: 1, energy: 5 });
+    if (owns(s, 'dog')) home('playdog', T.act.playdog, '30 min · +5 vibes', { hours: 0.5 });
+    home('callmaman', T.act.callmaman, '30 min · +8 vibes · she might send something', { hours: 0.5 });
+    home('dance', T.act.dance, '1h · +6 vibes, +2 health · -5 energy', { hours: 1, energy: 5 });
     home('daydream', 'Daydream about going abroad', '30 min · +3 vibes', { hours: 0.5 });
     if (s.items.smartphone) home('whatsapp', 'Sell things on your WhatsApp status', `2h · earn about ${cfa(500 + s.skills.trade * 100)}`, { hours: 2, from: 8 });
     add('furnish', 'Furnish your home', 'No time cost · mattress, fan, stove, TV and more', { group: 'life' });
   }
-  if (at(PLACES.maquis, a)) add('maquis', 'Night out at a Yop maquis', `4h · ${cfa(2000)} · +${party(s, 25)} vibes, +${party(s, 2)} clout · -${nightEnergy(s, 10)} energy`, { hours: 4, cost: 2000, energy: nightEnergy(s, 10), from: 18, group: 'life' });
-  if (at(PLACES.beach, a)) add('beach', 'Chill at Port-Bouët beach', `3h · ${cfa(2000)} · +20 vibes`, { hours: 3, cost: 2000, from: 9, until: 20, group: 'life' });
-  if (at(PLACES.club, a)) add('club', 'Show off at a Zone 4 club', `3h · ${cfa(40000)} · +${party(s, 30)} vibes, +${party(s, 8)} clout · -${nightEnergy(s, 20)} energy`, { hours: 3, cost: 40000, energy: nightEnergy(s, 20), from: 20, group: 'life' });
-  if (at(PLACES.football, a)) add('football', 'Play football with the boys', `2h · free · +${sport(s, 8)} health, +8 vibes · -15 energy`, { hours: 2, energy: 15, from: 7, until: 19, group: 'life' });
-  if (at(PLACES.gym, a)) add('gym', 'Train at the Treichville sports park', `2h · ${cfa(1000)} · +${sport(s, 10)} health · -15 energy`, { hours: 2, cost: 1000, energy: 15, from: 6, until: 20, group: 'life' });
+  if (at(PLACES.maquis, a)) add('maquis', T.act.maquis, `4h · ${cfa(2000)} · +${party(s, 25)} vibes, +${party(s, 2)} clout · -${nightEnergy(s, 10)} energy`, { hours: 4, cost: 2000, energy: nightEnergy(s, 10), from: 18, group: 'life' });
+  if (at(PLACES.beach, a)) add('beach', T.act.beach, `3h · ${cfa(2000)} · +20 vibes`, { hours: 3, cost: 2000, from: 9, until: 20, group: 'life' });
+  if (at(PLACES.club, a)) add('club', T.act.club, `3h · ${cfa(40000)} · +${party(s, 30)} vibes, +${party(s, 8)} clout · -${nightEnergy(s, 20)} energy`, { hours: 3, cost: 40000, energy: nightEnergy(s, 20), from: 20, group: 'life' });
+  if (at(PLACES.football, a)) add('football', T.act.football, `2h · free · +${sport(s, 8)} health, +8 vibes · -15 energy`, { hours: 2, energy: 15, from: 7, until: 19, group: 'life' });
+  if (at(PLACES.gym, a)) add('gym', T.act.gym, `2h · ${cfa(1000)} · +${sport(s, 10)} health · -15 energy`, { hours: 2, cost: 1000, energy: 15, from: 6, until: 20, group: 'life' });
 
   // Learning
   if (at(PLACES.bootcamp, a)) add('bootcamp', 'Coding bootcamp session', `6h · ${cfa(20000)} · +6 tech · -20 energy`, { hours: 6, cost: 20000, energy: 20, from: 8, until: 20, group: 'learn' });
   if (canSleepAtHome(s) && owns(s, 'desk')) add('study', 'Study at your desk', '3h · free · +2 tech · -10 energy', { hours: 3, energy: 10, group: 'learn' });
   if (s.items.smartphone) add('youtube', 'Learn from YouTube tutorials', `3h · ${cfa(500)} of data · +2 tech · -10 energy`, { hours: 3, cost: 500, energy: 10, group: 'learn' });
-  if (at(PLACES.haggle, a)) add('haggle', 'Learn to haggle from Tantie Awa', '4h · free · +3 trade · -15 energy', { hours: 4, energy: 15, from: 8, until: 18, group: 'learn' });
+  if (at(PLACES.haggle, a)) add('haggle', T.act.haggle, '4h · free · +3 trade · -15 energy', { hours: 4, energy: 15, from: 8, until: 18, group: 'learn' });
   if (at(PLACES.mixer, a)) add('mixer', 'After-work networking', `3h · ${cfa(8000)} · +5 charm, +2 clout`, { hours: 3, cost: 8000, from: 17, group: 'learn' });
-  if (at(PLACES.golf, a)) add('golf', 'Brunch at the golf club', `4h · ${cfa(120000)} · +10 charm, +8 clout, +10 vibes`, { hours: 4, cost: 120000, from: 10, until: 18, group: 'learn' });
+  if (at(PLACES.golf, a)) add('golf', T.act.golf, `4h · ${cfa(120000)} · +10 charm, +8 clout, +10 vibes`, { hours: 4, cost: 120000, from: 10, until: 18, group: 'learn' });
 
   // Money and places
   if (MARKETS[a]) add('market', `Trade at ${MARKETS[a]}`, '1h to open · buy cheap, sell dear', { hours: 1, from: 7, until: 20, group: 'money' });
   if (at(PLACES.bank, a)) add('bank', 'Go to the bank', 'No time cost · save, withdraw', { from: 8, until: 16, group: 'money' });
-  if (a === SHOP_AREA) add('shop', 'Shop at the Black Market and the car lot', '1h · phones, laptops, generators, cars', { hours: 1, from: 8, until: 19, group: 'money' });
+  if (a === SHOP_AREA) add('shop', T.act.shop, '1h · phones, laptops, generators, cars', { hours: 1, from: 8, until: 19, group: 'money' });
   if (Object.values(HOUSES).some((h) => h.area === a)) add('agent', 'See a housing agent', '1h · rent a place here', { hours: 1, from: 8, until: 18, group: 'money' });
   if (canSleepAtHome(s) && house(s).monthly) add('rent', 'Pay a month of rent', `${cfa(house(s).monthly)} · covers 30 more days`, { cost: house(s).monthly, group: 'money' });
   if (a === JAPA.area) add('embassy', 'Apply for a visa abroad', `Fee ${cfa(JAPA.fee)} · needs ${cfa(JAPA.proofOfFunds)} proof of funds`, { cost: JAPA.fee, from: 8, until: 14, group: 'money' });
@@ -571,7 +553,7 @@ export function act(s, id) {
       addStat(s, 'energy', -20);
       addStat(s, 'health', -2);
       addSkill(s, 'trade', 1);
-      log(s, `"Eau glacée! Eau glacée!" You made ${cfa(earned)} in the traffic jams.`, 'good');
+      log(s, T.log.hawk(cfa(earned)), 'good');
       break;
     }
     case 'skit': {
@@ -602,7 +584,7 @@ export function act(s, id) {
         s.cash += fee;
         addStat(s, 'clout', 6);
         s.stats.roles += 1;
-        log(s, `You got the part! You're dancing in the new coupé-décalé hit and earned ${cfa(fee)}.`, 'good');
+        log(s, T.log.auditionWin(cfa(fee)), 'good');
       } else {
         addStat(s, 'happiness', -4);
         addSkill(s, 'charm', 1);
@@ -615,7 +597,7 @@ export function act(s, id) {
       addStat(s, 'health', 4);
       addStat(s, 'happiness', meal(s, 0));
       s.today.ate = true;
-      log(s, `Attiéké, fried tuna, chilli and onions. That's a proper garba (${cfa(action.cost)}).`);
+      log(s, T.log.eat(cfa(action.cost)));
       break;
     case 'eat_posh':
       addStat(s, 'energy', 25);
@@ -623,26 +605,25 @@ export function act(s, id) {
       addStat(s, 'happiness', meal(s, 10));
       addStat(s, 'clout', 1);
       s.today.ate = true;
-      log(s, `Grilled fish, kedjenou and a fresh bissap. You posted it, of course (${cfa(action.cost)}).`);
+      log(s, T.log.eatPosh(cfa(action.cost)));
       break;
     case 'alloco':
       addStat(s, 'energy', 15);
       addStat(s, 'happiness', meal(s, 6));
       s.today.ate = true;
-      log(s, 'Hot alloco and brochettes with plenty of chilli. Delicious!');
+      log(s, T.log.alloco);
       break;
     case 'relax':
       addStat(s, 'energy', 10);
       addStat(s, 'happiness', owns(s, 'tv') ? 16 : 8);
-      log(s, owns(s, 'tv') ? 'You watched the Éléphants match on the big screen. What a goal!'
-        : 'You binged an Ivorian comedy series on your phone and laughed until you cried.');
+      log(s, owns(s, 'tv') ? T.log.relaxTv : T.log.relaxPhone);
       break;
     case 'cook':
       addStat(s, 'energy', 20);
       addStat(s, 'health', 5);
       addStat(s, 'happiness', meal(s, 0));
       s.today.ate = true;
-      log(s, 'You cooked attiéké with sauce graine at home. Cheap and tasty.');
+      log(s, T.log.cook);
       break;
     case 'nap':
       s.today.homeDone.push(id);
@@ -664,16 +645,16 @@ export function act(s, id) {
     case 'playdog':
       s.today.homeDone.push(id);
       addStat(s, 'happiness', 5);
-      log(s, 'You played fetch with Drogba until he flopped down in the shade.');
+      log(s, T.log.playdog);
       break;
     case 'callmaman': {
       s.today.homeDone.push(id);
       addStat(s, 'happiness', 8);
       if (rand(s) < (s.cash < 5000 ? 0.5 : 0.2)) {
         s.cash += 5000;
-        log(s, 'Maman asked if you are eating well, then sent 5,000 FCFA by Mobile Money "for food".', 'good');
+        log(s, T.log.mamanSends, 'good');
       } else {
-        log(s, 'Maman gave you all the family news and reminded you to go to church. +8 vibes.');
+        log(s, T.log.mamanNews);
       }
       break;
     }
@@ -682,7 +663,7 @@ export function act(s, id) {
       addStat(s, 'happiness', 6);
       addStat(s, 'health', 2);
       addStat(s, 'energy', -5);
-      log(s, 'You danced the "Gbê" in your room until the neighbours banged on the wall.');
+      log(s, T.log.dance);
       break;
     case 'daydream':
       s.today.homeDone.push(id);
@@ -694,7 +675,7 @@ export function act(s, id) {
       const earned = roundTo((500 + s.skills.trade * 100) * (0.6 + rand(s) * 0.8), 25);
       s.cash += earned;
       addSkill(s, 'trade', 1);
-      log(s, `You posted perfume, sneakers and wax pagne on your WhatsApp status. Sales: ${cfa(earned)}.`, 'good');
+      log(s, T.log.whatsapp(cfa(earned)), 'good');
       break;
     }
     case 'study':
@@ -706,28 +687,28 @@ export function act(s, id) {
       addStat(s, 'happiness', party(s, 25));
       addStat(s, 'clout', party(s, 2));
       addStat(s, 'energy', -nightEnergy(s, 10));
-      log(s, 'Braised chicken, cold drinks and coupé-décalé until the early hours. Total enjaillement!', 'good');
+      log(s, T.log.maquis, 'good');
       break;
     case 'beach':
       addStat(s, 'happiness', 20);
-      log(s, 'Sea breeze, waves and grilled fish at Port-Bouët.', 'good');
+      log(s, T.log.beach, 'good');
       break;
     case 'club':
       addStat(s, 'happiness', party(s, 30));
       addStat(s, 'clout', party(s, 8));
       addStat(s, 'energy', -nightEnergy(s, 20));
-      log(s, 'Sparklers, bottles, and the DJ shouted your name. You did the "travaillement" in style.', 'good');
+      log(s, T.log.club, 'good');
       break;
     case 'football':
       addStat(s, 'health', sport(s, 8));
       addStat(s, 'happiness', 8);
       addStat(s, 'energy', -15);
-      log(s, 'You scored a beauty on the neighbourhood pitch. The boys are calling you Drogba.');
+      log(s, T.log.football);
       break;
     case 'gym':
       addStat(s, 'health', sport(s, 10));
       addStat(s, 'energy', -15);
-      log(s, 'Laps and push-ups at the Treichville sports park. Your body thanks you.');
+      log(s, T.log.gym);
       break;
     case 'bootcamp':
       addSkill(s, 'tech', 6);
@@ -742,7 +723,7 @@ export function act(s, id) {
     case 'haggle':
       addSkill(s, 'trade', 3);
       addStat(s, 'energy', -15);
-      log(s, 'Tantie Awa: "Never take the first price, my child." +3 trade.', 'good');
+      log(s, T.log.haggle, 'good');
       break;
     case 'mixer':
       addSkill(s, 'charm', 5);
@@ -753,7 +734,7 @@ export function act(s, id) {
       addSkill(s, 'charm', 10);
       addStat(s, 'clout', 8);
       addStat(s, 'happiness', 10);
-      log(s, 'Brunch with the Riviera crowd. You are learning how the big bosses talk.', 'good');
+      log(s, T.log.golf, 'good');
       break;
     case 'rent': {
       const h = house(s);
@@ -789,8 +770,7 @@ function japa(s) {
     s.ending = {
       kind: s.dream === 'abroad' ? 'win' : 'japa',
       title: 'You made it abroad!',
-      text: 'Visa approved! You packed attiéké, a few wax pagnes and a lot of memories, and flew out from Port-Bouët. '
-        + 'Babi made you. Wherever you land, you will hustle like a true Abidjanais.',
+      text: T.abroad,
     };
     log(s, 'Visa approved. You moved abroad!', 'good');
   } else {
@@ -897,7 +877,7 @@ export function buyCrypto(s, amount) {
   if (amount <= 0 || !s.items.smartphone) return false;
   s.cash -= amount;
   s.crypto += amount / s.cryptoPrice;
-  log(s, `Bought ${cfa(amount)} of BabiCoin at ${cfa(s.cryptoPrice)}.`);
+  log(s, `Bought ${cfa(amount)} of ${T.coin} at ${cfa(s.cryptoPrice)}.`);
   return true;
 }
 
@@ -908,7 +888,7 @@ export function sellCrypto(s, fraction = 1) {
   s.crypto -= coins;
   if (s.crypto < 1e-9) s.crypto = 0;
   s.cash += value;
-  log(s, `Sold BabiCoin for ${cfa(value)}.`);
+  log(s, `Sold ${T.coin} for ${cfa(value)}.`);
   updateGoals(s);
   return true;
 }
@@ -982,9 +962,9 @@ const EVENTS = [
   {
     id: 'wedding', weight: 3,
     setup: () => ({ cost: 25000 }),
-    text: (d) => `Your cousin's wedding is on Saturday and the family pagne costs ${cfa(d.cost)}.`,
+    text: (d) => T.ev.wedding(cfa(d.cost)),
     options: [
-      { label: 'Buy the pagne and go dance', ok: (s, d) => s.cash >= d.cost,
+      { label: T.ev.weddingYes, ok: (s, d) => s.cash >= d.cost,
         apply: (s, d) => { s.cash -= d.cost; addStat(s, 'happiness', 15); addStat(s, 'clout', 6); addStat(s, 'energy', -10);
           return ['You danced the whole night. Everyone noticed your outfit.', 'good']; } },
       { label: 'Say you are travelling', apply: (s) => { addStat(s, 'happiness', -4);
@@ -994,11 +974,11 @@ const EVENTS = [
   {
     id: 'family', weight: 3,
     setup: (s) => ({ amount: Math.max(5000, roundTo(s.cash * 0.1, 500)) }),
-    text: (d) => `Your tonton in the village near Daloa needs ${cfa(d.amount)} for "urgent" roof repairs.`,
+    text: (d) => T.ev.family(cfa(d.amount)),
     options: [
       { label: 'Send it by Mobile Money', ok: (s, d) => s.cash >= d.amount,
         apply: (s, d) => { s.cash -= d.amount; addStat(s, 'happiness', 5); addStat(s, 'clout', 2);
-          return ['Tonton blessed you for ten minutes on the phone.', 'good']; } },
+          return [T.ev.familyThanks, 'good']; } },
       { label: '"The network is bad, I can\'t hear you"', apply: (s) => { addStat(s, 'happiness', -6);
         return ['The guilt follows you all day.', 'bad']; } },
     ],
@@ -1018,7 +998,7 @@ const EVENTS = [
   {
     id: 'lotto', weight: 2,
     setup: () => ({}),
-    text: () => 'The LONACI kiosk is calling your name. A lottery ticket costs 500 FCFA.',
+    text: () => T.ev.lotto,
     options: [
       { label: 'Play', ok: (s) => s.cash >= 500,
         apply: (s) => { s.cash -= 500;
@@ -1061,10 +1041,10 @@ const EVENTS = [
   {
     id: 'bapteme', weight: 2,
     setup: () => ({}),
-    text: () => 'Your neighbour is celebrating a baptism, and the smell of kedjenou and foutou is coming into your room.',
+    text: () => T.ev.feast,
     options: [
       { label: 'Go and say congratulations', apply: (s) => { addStat(s, 'energy', 10); addStat(s, 'happiness', 6); s.today.ate = true;
-        return ['A full plate of kedjenou, foutou and attiéké. Free!', 'good']; } },
+        return [T.ev.feastYes, 'good']; } },
       { label: 'Stay in', apply: () => ['You suffered in silence.', 'info'] },
     ],
   },
@@ -1121,7 +1101,7 @@ export const GOALS = [
   { id: 'half', label: 'Net worth of 500,000 FCFA' },
   { id: 'car', label: 'Own a car' },
   { id: 'fiveMillion', label: 'Net worth of 5 million FCFA' },
-  { id: 'friend', label: 'Make a friend in Babi' },
+  { id: 'friend', label: T.goalFriend },
 ];
 
 export function goalList(s) {
@@ -1153,7 +1133,7 @@ function updateGoals(s) {
     s.ending = {
       kind: 'win',
       title: `Dream achieved: ${d.name}!`,
-      text: `Day ${s.day}: ${s.name} arrived in Babi with almost nothing. Now: ${d.blurb.replace(/\.$/, '').toLowerCase()}. `
+      text: `Day ${s.day}: ${s.name} arrived in ${BRAND.city} with almost nothing. Now: ${d.blurb.replace(/\.$/, '').toLowerCase()}. `
         + 'The whole village is planning a party in your honour. C\'est dja!',
     };
     log(s, `You reached your dream: ${d.name}!`, 'good');
@@ -1215,13 +1195,6 @@ function addRel(s, id, delta) {
   if (after !== before && delta > 0) log(s, `You and ${PEOPLE[id].name} are now: ${after}.`, 'good');
 }
 
-const GIST = [
-  'talked about the Éléphants\' last match for an hour',
-  'shared the latest gist from the quartier',
-  'argued about who makes the best attiéké in Babi',
-  'laughed about the gbaka driver who took the wrong road',
-  'talked about plans for the future',
-];
 
 export function socialize(s, id, act) {
   if (s.ending || s.pendingEvent) return false;
@@ -1290,19 +1263,11 @@ function doFavour(s, id) {
   }
 }
 
-const TEXTS = [
-  'Ça dit quoi? Long time no see.',
-  'Did you see the Éléphants last night? Too sweet!',
-  'Come to the maquis on Saturday, everybody will be there.',
-  'Courage with the hustle, Babi is hard but we are strong.',
-  'I heard rice prices are going up. Stock up!',
-  'Happy Sunday! God bless.',
-];
 
 function friendMessages(s) {
   for (const [id, p] of Object.entries(s.people)) {
     if (p.rel >= 45 && rand(s) < 0.12) {
-      s.messages.unshift({ from: id, day: s.day, text: TEXTS[Math.floor(rand(s) * TEXTS.length)], read: false });
+      s.messages.unshift({ from: id, day: s.day, text: FRIEND_TEXTS[Math.floor(rand(s) * FRIEND_TEXTS.length)], read: false });
     }
   }
   s.messages.length = Math.min(s.messages.length, 40);
@@ -1343,7 +1308,7 @@ function businessIncome(s) {
     for (let i = 0; i < (s.businesses[id] ?? 0); i++) {
       if (b.breakdown && rand(s) < b.breakdown) {
         total -= b.repair;
-        notes.push(`a ${id} broke down (repairs ${cfa(b.repair)})`);
+        notes.push(`a ${b.short ?? id} broke down (repairs ${cfa(b.repair)})`);
         continue;
       }
       total += Math.round((b.income[0] + rand(s) * (b.income[1] - b.income[0])) * (weekend && b.weekend ? b.weekend : 1));
@@ -1380,11 +1345,6 @@ function payStaff(s) {
   }
 }
 
-// The Babi rich list. The others' fortunes are fixed; yours is live.
-const RICH = [
-  ['Hermann', 'Cocoa exports', 450000000], ['Grace', 'Fintech', 120000000], ['Nadia', 'Influencer', 35000000],
-  ['Monsieur Seydou', 'Banking', 25000000], ['Yao "Le Boss"', 'Gbaka fleet', 8000000], ['Tantie Awa', 'Pagne trade', 3000000],
-];
 
 export function richList(s) {
   return [...RICH.map(([name, source, worth]) => ({ name, source, worth })), { name: `${s.name} (you)`, source: 'The hustle', worth: netWorth(s), you: true }]

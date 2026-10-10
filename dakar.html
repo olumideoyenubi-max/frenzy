@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Dakar Frenzy</title>
+  <meta name="description" content="A Dakar life-sim: hustle from a family house in Parcelles to a villa in Les Almadies.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚌</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800&display=swap">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app">
+    <main class="stage" aria-label="Game view">
+      <div id="stage3d" class="stage3d"></div>
+      <div id="stage2d" class="stage2d" hidden></div>
+      <div id="stage-msg" class="stage-msg" hidden></div>
+      <div id="map-view" class="map-view" hidden>
+        <svg id="map" viewBox="0 0 640 400" role="group" aria-label="Map of Dakar's neighbourhoods"></svg>
+      </div>
+    </main>
+
+    <header class="hud">
+      <button class="me" id="me" type="button" aria-label="Your life: stats, goals and news"></button>
+      <div class="status" id="status"></div>
+      <div class="hud-right">
+        <button class="wallet" id="wallet" type="button" aria-label="Money and life summary"></button>
+        <button class="round" id="btn-help" type="button" aria-label="How to play">?</button>
+      </div>
+    </header>
+    <div class="meters" id="meters" role="img"></div>
+    <p class="place" id="place"></p>
+    <p class="hint" id="hint" hidden></p>
+    <div class="toasts" id="toasts" aria-live="polite"></div>
+
+    <nav class="tabbar" aria-label="Game sections">
+      <button type="button" data-tab="home"><span aria-hidden="true">🏠</span>Home</button>
+      <button type="button" data-tab="street"><span aria-hidden="true">🚶🏾</span>Street</button>
+      <button type="button" id="btn-do" class="do" aria-label="Things to do here"><span aria-hidden="true">✨</span>Do</button>
+      <button type="button" data-tab="map"><span aria-hidden="true">🗺️</span>Map</button>
+      <button type="button" id="btn-phone"><span aria-hidden="true">📱</span>Phone<span class="badge" id="phone-badge" hidden></span></button>
+    </nav>
+  </div>
+
+  <dialog id="modal">
+    <form method="dialog" class="modal-inner">
+      <div class="modal-head">
+        <h2 id="modal-title"></h2>
+        <button class="icon" value="close" aria-label="Close" id="modal-x">✕</button>
+      </div>
+      <div id="modal-body"></div>
+    </form>
+  </dialog>
+
+  <script>globalThis.FRENZY_CITY = 'dakar';</script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script type="module" src="js/ui.js"></script>
+</body>
+</html>
