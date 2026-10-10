@@ -296,6 +296,8 @@ export const T = {
     football: 'Play a navétanes football match',
     golf: 'Lunch at a Ngor beach club',
     shop: 'Shop at Sandaga and the car lot',
+    maquisdrink: 'Order dibi and a cold bissap',
+    chat: 'Share attaya with the regulars',
   },
   log: {
     hawk: (amt) => `"Café Touba! Café Touba!" You made ${amt} in the traffic jams.`,
@@ -318,6 +320,9 @@ export const T = {
     gym: 'Push-ups and sprints in the sand with the wrestlers. Your body thanks you.',
     haggle: 'Adja Fatou: "Never take the first price, my child." +3 trade.',
     golf: 'Lunch with the Almadies crowd. You are learning how the big bosses talk.',
+    maquisdrink: 'Grilled dibi with onions and a cold bissap while the sabar drums warm up.',
+    chat: 'You shared three rounds of attaya and all the gist from the quartier.',
+    swim: 'You swam between the pirogues at Yoff and dried off in the sun.',
   },
   ev: {
     wedding: (c) => `Your cousin's wedding is on Saturday and the family bazin costs ${c}.`,
@@ -332,6 +337,7 @@ export const T = {
   dogName: 'Sadio',
   richTitle: 'Dakar rich list',
   moveIn: "2 months' deposit, 1 month's advance, 1 month agency fee",
+  lots: { maquis: { label: 'Dibiterie & sabar', sign: 'DIBITERIE' } },
 };
 
 export const GIST = [

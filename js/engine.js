@@ -85,6 +85,50 @@ function addSkill(s, key, delta) {
 }
 
 export const hasTrait = (s, id) => s.traits.includes(id);
+
+// ---------- needs ----------
+// Like The Sims: needs drain as time passes and are refilled by eating, sleeping, washing, the toilet and friends.
+// `happiness` is the Fun need (shown as Vibes); `energy` is shared with actions.
+export const NEEDS = [
+  { id: 'hunger', label: 'Hunger', icon: '🍽️', drain: 4.5, low: "You're starving. Go and eat something!" },
+  { id: 'energy', label: 'Energy', icon: '⚡', drain: 0, low: "You're exhausted. Rest or sleep soon." },
+  { id: 'hygiene', label: 'Hygiene', icon: '🧼', drain: 2.5, low: 'You smell a bit. People are starting to notice. Have a wash!' },
+  { id: 'bladder', label: 'Bladder', icon: '🚽', drain: 6, low: 'You really need the toilet!' },
+  { id: 'happiness', label: 'Fun', icon: '🎉', drain: 0.6, low: "You're bored stiff. Do something fun." },
+  { id: 'social', label: 'Social', icon: '💬', drain: 1.5, low: "You're lonely. Call someone or go out and chat." },
+];
+
+function feed(s, amount) {
+  s.today.ate = true;
+  addStat(s, 'hunger', amount);
+}
+
+// Mood is how well your needs are met, with the lowest need counting double.
+export function moodScore(s) {
+  const vals = NEEDS.map((nd) => s[nd.id]);
+  return Math.round((vals.reduce((a, b) => a + b, 0) + Math.min(...vals)) / (vals.length + 1));
+}
+
+// Moves the clock on and drains needs. Every action that takes time goes through here.
+function passTime(s, hours) {
+  s.hour += hours;
+  for (const nd of NEEDS) {
+    if (!nd.drain) continue;
+    const before = s[nd.id];
+    let drain = nd.drain * hours;
+    if (nd.id === 'happiness' && s.social < 25) drain *= 2.5;
+    addStat(s, nd.id, -drain);
+    if (before >= 20 && s[nd.id] < 20) log(s, nd.low, 'bad');
+  }
+  if (s.bladder <= 0) {
+    s.bladder = 70;
+    addStat(s, 'hygiene', -40);
+    addStat(s, 'happiness', -20);
+    addStat(s, 'clout', -3);
+    log(s, "Wahala! You couldn't hold it any longer. Embarrassing...", 'bad');
+  }
+  if (s.hunger <= 0) addStat(s, 'health', -3 * hours);
+}
 export const owns = (s, id) => Boolean(s.furniture[id]);
 
 export const capacity = (s) => (s.items.car ? CARRY.car : CARRY.base);
@@ -115,6 +159,7 @@ export function drawBackground(random = Math.random) {
   return (list.find(([, b]) => (r -= b.weight) < 0) ?? list[0])[0];
 }
 
+const pickNeeds = (o) => Object.fromEntries(['hunger', 'hygiene', 'bladder', 'social'].filter((k) => k in o).map((k) => [k, o[k]]));
 const noBusinesses = () => Object.fromEntries(Object.keys(BUSINESSES).map((id) => [id, 0]));
 
 // Brings an older save up to date. Returns null if it can't be used.
@@ -131,7 +176,11 @@ export function migrate(saved) {
     saved.today.homeDone ??= [];
     saved.version = 3;
   }
-  return saved.version === 3 ? saved : null;
+  if (saved.version === 3) {
+    Object.assign(saved, { hunger: 60, hygiene: 70, bladder: 70, social: 60, ...pickNeeds(saved) });
+    saved.version = 4;
+  }
+  return saved.version === 4 ? saved : null;
 }
 
 export function newGame(seed = (Date.now() ^ (Math.random() * 1e9)) >>> 0, setup = {}) {
@@ -140,7 +189,7 @@ export function newGame(seed = (Date.now() ^ (Math.random() * 1e9)) >>> 0, setup
   const home = HOUSES[startHome];
   const bg = BACKGROUNDS[cfg.background];
   const s = {
-    version: 3,
+    version: 4,
     seed,
     rng: seed | 0,
     name: String(cfg.name).trim().slice(0, 24) || DEFAULT_SETUP.name,
@@ -159,6 +208,10 @@ export function newGame(seed = (Date.now() ^ (Math.random() * 1e9)) >>> 0, setup
     energy: 80,
     health: 85,
     happiness: 60,
+    hunger: 70,
+    hygiene: 80,
+    bladder: 75,
+    social: 60,
     clout: 0,
     skills: { tech: 0, trade: 0, charm: 5 },
     area: home.area,
@@ -209,7 +262,7 @@ function startDay(s) {
     homeDone: [],
   };
   if (s.staff.cook && s.sleptHome) {
-    s.today.ate = true;
+    feed(s, 35);
     addStat(s, 'energy', 10);
     log(s, 'Your cook made breakfast: hot bread, omelette and Nescafé. +10 energy.', 'good');
   }
@@ -289,15 +342,20 @@ export function sleep(s) {
 }
 
 function endOfDay(s) {
-  if (!s.today.ate) {
+  if (!s.today.ate || s.hunger < 15) {
     addStat(s, 'health', -8);
     log(s, 'You went to bed without eating. Your health is suffering.', 'bad');
   } else {
     addStat(s, 'health', 2);
   }
   if (s.energy < 10) addStat(s, 'health', -5);
-  if (s.happiness < 10) addStat(s, 'health', -3);
+  if (moodScore(s) < 15) addStat(s, 'health', -3);
   addStat(s, 'happiness', -2);
+  // Overnight you get hungry, need the toilet and wake up a little grubby.
+  addStat(s, 'hunger', -18);
+  addStat(s, 'bladder', -35);
+  addStat(s, 'hygiene', -10);
+  addStat(s, 'social', -5);
   s.bank = Math.round(s.bank * 1.0005);
   businessIncome(s);
   if (dateOf(s.day).getUTCDay() === 6) payStaff(s);
@@ -365,7 +423,7 @@ export function travel(s, to, mode) {
   const opt = travelOptions(s, to).find((o) => o.id === mode);
   if (!opt || opt.blocked) return false;
   s.cash -= opt.cost;
-  s.hour += opt.hours;
+  passTime(s, opt.hours);
   addStat(s, 'energy', -opt.energy);
   const from = AREAS[s.area].name;
   s.area = to;
@@ -420,7 +478,7 @@ export function jobBlock(s, jobId) {
 export function jobPay(s, jobId) {
   const job = JOBS[jobId];
   let pay = job.pay * (job.usd ? s.fx : 1);
-  if (s.happiness < 15) pay *= 0.7;
+  if (moodScore(s) < 25) pay *= 0.7;
   return Math.round(pay);
 }
 
@@ -491,9 +549,12 @@ export function actions(s) {
     if (owns(s, 'stove')) add('cook', 'Cook at home', `1h · ${cfa(300)} · +20 energy, +5 health`, { hours: 1, cost: 300, group: 'life' });
     const once = (id) => (s.today.homeDone.includes(id) ? 'Already done today' : null);
     const home = (id, label, desc, opts) => { add(id, label, desc, { ...opts, group: 'home' }); const a = list[list.length - 1]; a.blocked ??= once(id); };
+    add('toilet', 'Use the toilet', '15 min · bladder full relief', { hours: 0.25, group: 'home' });
+    if (owns(s, 'fridge')) add('snack', 'Grab something from the fridge', `15 min · ${cfa(300)} · +25 hunger`, { hours: 0.25, cost: 300, group: 'home' });
     home('nap', 'Take a nap', '1h · +15 energy', { hours: 1 });
     home('liein', 'Stay in bed scrolling', '2h · +5 energy, +6 vibes', { hours: 2 });
-    home('wash', 'Have a bucket bath', '30 min · +2 health, +3 vibes', { hours: 0.5 });
+    add('wash', owns(s, 'shower') ? 'Take a shower' : 'Have a bucket bath',
+      `30 min · +${owns(s, 'shower') ? 90 : 60} hygiene, +3 vibes`, { hours: 0.5, group: 'home' });
     if (owns(s, 'dog')) home('playdog', T.act.playdog, '30 min · +5 vibes', { hours: 0.5 });
     home('callmaman', T.act.callmaman, '30 min · +8 vibes · she might send something', { hours: 0.5 });
     home('dance', T.act.dance, '1h · +6 vibes, +2 health · -5 energy', { hours: 1, energy: 5 });
@@ -501,6 +562,12 @@ export function actions(s) {
     if (s.items.smartphone) home('whatsapp', 'Sell things on your WhatsApp status', `2h · earn about ${cfa(500 + s.skills.trade * 100)}`, { hours: 2, from: 8 });
     add('furnish', 'Furnish your home', 'No time cost · mattress, fan, stove, TV and more', { group: 'life' });
   }
+  if (!canSleepAtHome(s)) add('publictoilet', 'Pay for a public toilet', `15 min · ${cfa(100)} · bladder relief`, { hours: 0.25, cost: 100, group: 'life' });
+  if (at(PLACES.maquis, a)) {
+    add('maquisdrink', T.act.maquisdrink ?? 'Order food and a cold drink', `1h · ${cfa(3000)} · +40 hunger, +8 fun, +8 social`, { hours: 1, cost: 3000, from: 11, group: 'life' });
+    add('chat', T.act.chat ?? 'Chat with the regulars', '1h · free · +25 social, +5 fun', { hours: 1, from: 11, group: 'life' });
+  }
+  if (at(PLACES.beach, a)) add('swim', T.act.swim ?? 'Swim in the sea', '1.5h · free · +25 hygiene, +15 fun · -10 energy', { hours: 1.5, energy: 10, from: 8, until: 19, group: 'life' });
   if (at(PLACES.maquis, a)) add('maquis', T.act.maquis, `4h · ${cfa(2000)} · +${party(s, 25)} vibes, +${party(s, 2)} clout · -${nightEnergy(s, 10)} energy`, { hours: 4, cost: 2000, energy: nightEnergy(s, 10), from: 18, group: 'life' });
   if (at(PLACES.beach, a)) add('beach', T.act.beach, `3h · ${cfa(2000)} · +20 vibes`, { hours: 3, cost: 2000, from: 9, until: 20, group: 'life' });
   if (at(PLACES.club, a)) add('club', T.act.club, `3h · ${cfa(40000)} · +${party(s, 30)} vibes, +${party(s, 8)} clout · -${nightEnergy(s, 20)} energy`, { hours: 3, cost: 40000, energy: nightEnergy(s, 20), from: 20, group: 'life' });
@@ -532,10 +599,11 @@ export function act(s, id) {
   const action = actions(s).find((x) => x.id === id);
   if (!action || action.blocked) return null;
   s.cash -= action.cost;
-  s.hour += action.hours;
+  passTime(s, action.hours);
 
   switch (id) {
     case 'work': {
+      addStat(s, 'social', 5);
       const job = JOBS[s.job];
       const pay = jobPay(s, s.job);
       s.cash += pay;
@@ -544,7 +612,7 @@ export function act(s, id) {
       addSkill(s, job.skill, 1);
       s.today.worked = true;
       s.stats.shifts += 1;
-      log(s, `You worked a shift as ${job.title} and earned ${cfa(pay)}.${s.happiness < 15 ? ' (Your low vibes cost you some pay.)' : ''}`, 'good');
+      log(s, `You worked a shift as ${job.title} and earned ${cfa(pay)}.${moodScore(s) < 25 ? ' (Your bad mood cost you some pay.)' : ''}`, 'good');
       break;
     }
     case 'hawk': {
@@ -596,7 +664,7 @@ export function act(s, id) {
       addStat(s, 'energy', 20);
       addStat(s, 'health', 4);
       addStat(s, 'happiness', meal(s, 0));
-      s.today.ate = true;
+      feed(s, 45);
       log(s, T.log.eat(cfa(action.cost)));
       break;
     case 'eat_posh':
@@ -604,13 +672,13 @@ export function act(s, id) {
       addStat(s, 'health', 5);
       addStat(s, 'happiness', meal(s, 10));
       addStat(s, 'clout', 1);
-      s.today.ate = true;
+      feed(s, 60);
       log(s, T.log.eatPosh(cfa(action.cost)));
       break;
     case 'alloco':
       addStat(s, 'energy', 15);
       addStat(s, 'happiness', meal(s, 6));
-      s.today.ate = true;
+      feed(s, 30);
       log(s, T.log.alloco);
       break;
     case 'relax':
@@ -622,8 +690,38 @@ export function act(s, id) {
       addStat(s, 'energy', 20);
       addStat(s, 'health', 5);
       addStat(s, 'happiness', meal(s, 0));
-      s.today.ate = true;
+      feed(s, 50);
       log(s, T.log.cook);
+      break;
+    case 'toilet':
+      s.bladder = 100;
+      log(s, 'Ahh, much better.');
+      break;
+    case 'publictoilet':
+      s.bladder = 100;
+      addStat(s, 'hygiene', -3);
+      log(s, 'You paid 100 FCFA for the public toilet. It was not the cleanest, but it did the job.');
+      break;
+    case 'snack':
+      feed(s, 25);
+      log(s, 'A cold drink and leftovers from the fridge. Just what you needed.');
+      break;
+    case 'maquisdrink':
+      feed(s, 40);
+      addStat(s, 'happiness', 8);
+      addStat(s, 'social', 8);
+      log(s, T.log.maquisdrink ?? 'Food, a cold drink and good company.', 'good');
+      break;
+    case 'chat':
+      addStat(s, 'social', 25);
+      addStat(s, 'happiness', 5);
+      log(s, T.log.chat ?? 'You chatted with the regulars about football, politics and everybody\'s business.');
+      break;
+    case 'swim':
+      addStat(s, 'hygiene', 25);
+      addStat(s, 'happiness', 15);
+      addStat(s, 'energy', -10);
+      log(s, T.log.swim ?? 'You swam in the waves and dried off in the sun.', 'good');
       break;
     case 'nap':
       s.today.homeDone.push(id);
@@ -637,10 +735,10 @@ export function act(s, id) {
       log(s, 'You stayed in bed scrolling through TikTok and WhatsApp statuses. Bliss.');
       break;
     case 'wash':
-      s.today.homeDone.push(id);
+      addStat(s, 'hygiene', owns(s, 'shower') ? 90 : 60);
       addStat(s, 'health', 2);
       addStat(s, 'happiness', 3);
-      log(s, 'A cool bucket bath. You feel brand new.');
+      log(s, owns(s, 'shower') ? 'A long hot shower. You feel brand new.' : 'A cool bucket bath. You feel brand new.');
       break;
     case 'playdog':
       s.today.homeDone.push(id);
@@ -648,6 +746,7 @@ export function act(s, id) {
       log(s, T.log.playdog);
       break;
     case 'callmaman': {
+      addStat(s, 'social', 20);
       s.today.homeDone.push(id);
       addStat(s, 'happiness', 8);
       if (rand(s) < (s.cash < 5000 ? 0.5 : 0.2)) {
@@ -684,22 +783,26 @@ export function act(s, id) {
       log(s, 'Three quiet hours at your desk with a programming book. +2 tech.');
       break;
     case 'maquis':
+      addStat(s, 'social', 25);
       addStat(s, 'happiness', party(s, 25));
       addStat(s, 'clout', party(s, 2));
       addStat(s, 'energy', -nightEnergy(s, 10));
       log(s, T.log.maquis, 'good');
       break;
     case 'beach':
+      addStat(s, 'social', 5);
       addStat(s, 'happiness', 20);
       log(s, T.log.beach, 'good');
       break;
     case 'club':
+      addStat(s, 'social', 20);
       addStat(s, 'happiness', party(s, 30));
       addStat(s, 'clout', party(s, 8));
       addStat(s, 'energy', -nightEnergy(s, 20));
       log(s, T.log.club, 'good');
       break;
     case 'football':
+      addStat(s, 'social', 15);
       addStat(s, 'health', sport(s, 8));
       addStat(s, 'happiness', 8);
       addStat(s, 'energy', -15);
@@ -726,11 +829,13 @@ export function act(s, id) {
       log(s, T.log.haggle, 'good');
       break;
     case 'mixer':
+      addStat(s, 'social', 20);
       addSkill(s, 'charm', 5);
       addStat(s, 'clout', 2);
       log(s, 'You swapped numbers with founders, bankers and a very chatty pastor. +5 charm.', 'good');
       break;
     case 'golf':
+      addStat(s, 'social', 15);
       addSkill(s, 'charm', 10);
       addStat(s, 'clout', 8);
       addStat(s, 'happiness', 10);
@@ -1043,7 +1148,7 @@ const EVENTS = [
     setup: () => ({}),
     text: () => T.ev.feast,
     options: [
-      { label: 'Go and say congratulations', apply: (s) => { addStat(s, 'energy', 10); addStat(s, 'happiness', 6); s.today.ate = true;
+      { label: 'Go and say congratulations', apply: (s) => { addStat(s, 'energy', 10); addStat(s, 'happiness', 6); feed(s, 40);
         return [T.ev.feastYes, 'good']; } },
       { label: 'Stay in', apply: () => ['You suffered in silence.', 'info'] },
     ],
@@ -1188,6 +1293,11 @@ export function socialOptions(s, id) {
 }
 
 function addRel(s, id, delta) {
+  // Nobody warms up to someone who smells.
+  if (delta > 0 && s.hygiene < 20) {
+    delta = Math.ceil(delta / 2);
+    log(s, `${PEOPLE[id].name} wrinkles their nose. You could do with a wash.`, 'bad');
+  }
   const p = (s.people[id] ??= { rel: 0 });
   const before = levelName(p.rel);
   p.rel = clamp(p.rel + delta);
@@ -1202,20 +1312,23 @@ export function socialize(s, id, act) {
   if (!opt || opt.blocked) return false;
   const p = PEOPLE[id];
   const a = SOCIAL[act];
-  s.hour += a.hours;
+  passTime(s, a.hours);
   (s.today.talked[id] ??= []).push(act);
   const first = !s.people[id];
   switch (act) {
     case 'hello':
+      addStat(s, 'social', 5);
       addRel(s, id, first ? 10 : 4);
       log(s, first ? `You introduced yourself to ${p.name}, ${p.role.toLowerCase()}.` : `You greeted ${p.name}. "On dit quoi?"`);
       break;
     case 'gist':
+      addStat(s, 'social', 15);
       addRel(s, id, 8);
       addStat(s, 'happiness', 4);
       log(s, `You and ${p.name} ${GIST[Math.floor(rand(s) * GIST.length)]}. +4 vibes.`);
       break;
     case 'joke':
+      addStat(s, 'social', 8);
       if (rand(s) < 0.4 + s.skills.charm / 150) {
         addRel(s, id, 10);
         addStat(s, 'happiness', 3);
@@ -1226,10 +1339,12 @@ export function socialize(s, id, act) {
       }
       break;
     case 'compliment':
+      addStat(s, 'social', 6);
       addRel(s, id, hasTrait(s, 'talker') ? 9 : 5);
       log(s, `You complimented ${p.name}. They looked pleased.`);
       break;
     case 'gift':
+      addStat(s, 'social', 6);
       s.cash -= a.cost;
       addRel(s, id, 12);
       log(s, `You gave ${p.name} a small gift. "Ah, you shouldn't have!"`, 'good');
@@ -1257,7 +1372,7 @@ function doFavour(s, id) {
     addStat(s, 'clout', 8);
     log(s, `${p.name} featured you in a video. Your phone won't stop buzzing. +8 clout.`, 'good');
   } else if (p.perk === 'food') {
-    s.today.ate = true;
+    feed(s, 40);
     addStat(s, 'energy', 15);
     log(s, `${p.name} shared a meal with you. +15 energy.`, 'good');
   }

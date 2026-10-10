@@ -336,7 +336,8 @@ test('version 2 saves are upgraded', () => {
   delete old.people; delete old.messages; delete old.businesses; delete old.staff; delete old.favours;
   delete old.today.talked; delete old.today.homeDone;
   const s = G.migrate(old);
-  assert.equal(s.version, 3);
+  assert.equal(s.version, 4);
+  assert.equal(typeof s.hunger, 'number');
   assert.deepEqual(s.businesses, { gbaka: 0, maquis: 0 });
   assert.equal(G.migrate({ version: 1 }), null);
 });
@@ -350,4 +351,80 @@ test('the padi dream needs four close friends', () => {
   s.people.ibrahim = { rel: 78 };
   G.socialize(s, 'ibrahim', 'hello');
   assert.equal(s.ending?.kind, 'win');
+});
+
+test('needs drain as time passes', () => {
+  const s = fresh();
+  const before = { hunger: s.hunger, bladder: s.bladder, hygiene: s.hygiene };
+  G.act(s, 'nap');
+  assert.ok(s.hunger < before.hunger);
+  assert.ok(s.bladder < before.bladder);
+  assert.ok(s.hygiene < before.hygiene);
+});
+
+test('the toilet empties the bladder, and holding it too long ends badly', () => {
+  const s = fresh();
+  s.bladder = 30;
+  G.act(s, 'toilet');
+  assert.equal(s.bladder, 100);
+  s.bladder = 3;
+  const hygiene = s.hygiene;
+  G.act(s, 'nap');
+  assert.ok(s.hygiene < hygiene - 30, 'an accident costs hygiene');
+  assert.ok(s.log.some((l) => l.text.includes("couldn't hold it")));
+});
+
+test('eating fills hunger; washing fills hygiene; a shower does more', () => {
+  const s = fresh();
+  s.hunger = 10;
+  G.act(s, 'eat');
+  assert.ok(s.hunger >= 50);
+  s.hygiene = 10;
+  G.act(s, 'wash');
+  assert.ok(s.hygiene >= 60);
+  s.cash = 200000;
+  G.buyFurniture(s, 'shower');
+  s.hygiene = 0;
+  G.act(s, 'wash');
+  assert.ok(s.hygiene >= 85);
+});
+
+test('talking to people fills the social need', () => {
+  const s = fresh();
+  s.area = 'adjame';
+  s.hour = 10;
+  s.social = 10;
+  G.socialize(s, 'awa', 'hello');
+  assert.ok(s.social > 10);
+});
+
+test('bad hygiene halves how fast people warm to you', () => {
+  const s = fresh();
+  s.area = 'adjame';
+  s.hour = 10;
+  s.hygiene = 5;
+  G.socialize(s, 'awa', 'hello');
+  assert.equal(G.relation(s, 'awa'), 5);
+});
+
+test('mood comes from needs and a bad mood cuts pay', () => {
+  const s = fresh();
+  s.area = 'abobo';
+  G.takeJob(s, 'apprenti');
+  for (const k of ['hunger', 'hygiene', 'bladder', 'happiness', 'social']) s[k] = 5;
+  s.energy = 90;
+  assert.ok(G.moodScore(s) < 25);
+  assert.equal(G.jobPay(s, 'apprenti'), 3500);
+});
+
+test('the beach and the maquis have their own things to do', () => {
+  const s = fresh();
+  s.area = 'portbouet';
+  s.hour = 10;
+  assert.ok(G.actions(s).some((a) => a.id === 'swim' && !a.blocked));
+  assert.ok(G.actions(s).some((a) => a.id === 'publictoilet'));
+  s.area = 'yopougon';
+  s.hour = 13;
+  assert.ok(G.actions(s).some((a) => a.id === 'maquisdrink' && !a.blocked));
+  assert.ok(G.actions(s).some((a) => a.id === 'chat' && !a.blocked));
 });

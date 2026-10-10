@@ -756,3 +756,29 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.5); }
 }
 :root[data-city="dakar"][data-theme="dark"] { --accent-soft: #3a3212; }
 :root[data-city="dakar"] .tabbar .do { box-shadow: 0 6px 18px rgba(242, 183, 5, 0.45), 0 0 0 5px var(--glass); }
+
+/* Needs gauges warn when they run low; the label shows on wide screens. */
+.gauge.low { animation: need-pulse 1.2s ease-in-out infinite; }
+@keyframes need-pulse { 50% { transform: scale(1.1); } }
+@media (prefers-reduced-motion: reduce) { .gauge.low { animation: none; } }
+.bar { grid-template-columns: 7rem 1fr 2rem; }
+.meters .bar { grid-template-columns: 1.4rem 1fr 1.8rem; }
+
+/* Leave a place you walked into */
+.leave {
+  position: absolute;
+  left: 12px;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 100px);
+  border: none;
+  border-radius: 99px;
+  padding: 0.55rem 1rem;
+  font-weight: 800;
+  background: var(--glass);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(10px);
+}
+@media (max-width: 700px) {
+  .meters { grid-template-columns: 1fr; gap: 0.2rem; }
+  .gauge { width: 2.25rem; height: 2.25rem; }
+  .leave { bottom: calc(env(safe-area-inset-bottom, 0px) + 190px); }
+}

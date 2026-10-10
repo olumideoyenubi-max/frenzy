@@ -177,6 +177,8 @@ export const FURNITURE = {
   tv: { name: 'TV with satellite', icon: '📺', price: 80000, blurb: 'Watching TV at home gives +8 more vibes.' },
   dog: { name: 'A dog called Drogba', icon: '🐕', price: 40000, blurb: '+4 vibes a night. Toughs think twice.' },
   sofa: { name: 'Leather sofa', icon: '🛋️', price: 120000, clout: 3, blurb: '+3 vibes a night, +3 clout.' },
+  shower: { name: 'Shower cabin', icon: '🚿', price: 60000, blurb: 'Showers give +90 hygiene instead of +60.' },
+  fridge: { name: 'Fridge', icon: '🧊', price: 90000, blurb: 'Grab a snack at home any time: +25 hunger for 300 FCFA.' },
   ac: { name: 'Air conditioner', icon: '❄️', price: 350000, clout: 5, blurb: '+10 energy a night when the power is on. +5 clout.' },
 };
 
@@ -340,6 +342,8 @@ export const T = {
     football: 'Play football with the boys',
     golf: 'Brunch at the golf club',
     shop: 'Shop at the Black Market and the car lot',
+    maquisdrink: 'Order braised chicken and a cold drink',
+    chat: 'Gist with the regulars',
   },
   log: {
     hawk: (amt) => `"Eau glacée! Eau glacée!" You made ${amt} in the traffic jams.`,
@@ -362,6 +366,9 @@ export const T = {
     gym: 'Laps and push-ups at the Treichville sports park. Your body thanks you.',
     haggle: 'Tantie Awa: "Never take the first price, my child." +3 trade.',
     golf: 'Brunch with the Riviera crowd. You are learning how the big bosses talk.',
+    maquisdrink: 'Braised chicken, attiéké and a cold drink under the fairy lights.',
+    chat: 'You gisted with the regulars about the Éléphants, politics and everybody\'s business.',
+    swim: 'You swam in the Port-Bouët waves and dried off in the sun.',
   },
   ev: {
     wedding: (c) => `Your cousin's wedding is on Saturday and the family pagne costs ${c}.`,

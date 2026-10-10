@@ -47,6 +47,18 @@ Every game starts with a short setup, inspired by Lagos Life:
 Furnish your home from a catalogue (mattress, mosquito net, fan, gas stove, TV, a dog called Drogba, air conditioning and more).
 Each piece has a real effect on sleep, meals, learning or mood, and it moves with you when you change house.
 
+## Needs and places (inspired by The Sims and FreeSims)
+
+- **Six needs:** hunger, energy, hygiene, bladder, fun and social drain as the clock moves. Your mood is built from
+  them, with the lowest need counting double. A bad mood cuts your pay; going hungry hurts your health.
+  Hold on too long and there's an embarrassing accident. Skip washing and people warm to you half as fast.
+- **Bathroom and kitchen:** every home has a toilet. Buy a shower (bigger hygiene boost) and a fridge (snacks at home).
+  Out and about, a public toilet costs 100 FCFA.
+- **Places you can walk into:** doors on the street lead to the maquis (bar, dance floor, tables of regulars, DJ booth),
+  the market (stalls, food stand, public toilet) and the beach (swim in the sea, umbrellas, fish grill, a painted pirogue).
+  Residents who are around come in too.
+- **Residents stroll** around the street and the places, and stop when you walk up to talk.
+
 ## Around the city
 
 - **Walk around:** click the floor of your room or the street and your character walks there. Click your bed,

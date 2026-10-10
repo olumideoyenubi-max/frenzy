@@ -3,6 +3,7 @@
 import {
   AREAS, ROADS, GOODS, MARKETS, JOBS, HOUSES, MOVE_IN_MONTHS, JAPA,
   TRAITS, DREAMS, BACKGROUNDS, STARTS, AVATAR, FURNITURE, PEOPLE, STREET_LINES, TRANSPORT, BRAND, MAP, SCENE, T, HELP, SHOP_AREA, CITY_ID,
+  PLACES,
 } from './data.js';
 import * as G from './engine.js';
 import { has3D, createStage } from './scene3d.js';
@@ -116,6 +117,7 @@ const ACT_ICON = {
   dance: '💃🏾', daydream: '✈️', whatsapp: '📲', maquis: '🍻', beach: '🏖️', club: '🪩', football: '⚽', gym: '🏃🏾',
   bootcamp: '💻', study: '📚', youtube: '▶️', haggle: '🤝', mixer: '🥂', golf: '⛳', market: '🧺', bank: '🏦',
   shop: '📱', agent: '🔑', rent: '🏠', embassy: '🛂', sleep: '🌙',
+  toilet: '🚽', publictoilet: '🚽', snack: '🥤', maquisdrink: '🍗', chat: '💬', swim: '🏊🏾',
   hello: '👋', gist: '💬', joke: '😂', compliment: '🌟', gift: '🎁', favour: '🙏',
 };
 
@@ -151,7 +153,7 @@ function gauge(icon, value, label) {
   const r = 17;
   const c = 2 * Math.PI * r;
   const tone = value >= 50 ? 'ok' : value >= 25 ? 'mid' : 'low';
-  return `<div class="gauge ${tone}" title="${label} ${Math.round(value)}">
+  return `<div class="gauge ${tone}" title="${label} ${Math.round(value)}" data-label="${label}">
     <svg viewBox="0 0 44 44" aria-hidden="true"><circle cx="22" cy="22" r="${r}" class="g-track"/>
       <circle cx="22" cy="22" r="${r}" class="g-fill" stroke-dasharray="${(value / 100) * c} ${c}" transform="rotate(-90 22 22)"/></svg>
     <span class="g-ic" aria-hidden="true">${icon}</span><span class="g-val">${Math.round(value)}</span>
@@ -161,9 +163,10 @@ function gauge(icon, value, label) {
 const timeOfDay = (h) => (h < 9 ? 'morning' : h < 17 ? 'day' : h < 19.5 ? 'evening' : 'night');
 
 function renderTop() {
-  const ring = s.happiness >= 70 ? 'var(--green)' : s.happiness >= 45 ? 'var(--accent)' : 'var(--red)';
+  const m = G.moodScore(s);
+  const ring = m >= 70 ? 'var(--green)' : m >= 45 ? 'var(--accent)' : 'var(--red)';
   $('#me').innerHTML = `<span class="me-ava" style="--ring:${ring}">${avatarSvg(s.avatar, { width: 34, label: s.name })}</span>
-    <span class="me-text"><strong>${esc(s.name)}</strong><small>${mood(s.happiness)}</small></span>`;
+    <span class="me-text"><strong>${esc(s.name)}</strong><small>${mood(m)} · ❤️ ${Math.round(s.health)}</small></span>`;
   // The clock arc fills as the day goes from 06h00 to midnight.
   const dayFrac = Math.max(0, Math.min(1, (s.hour - 6) / 18));
   const arc = 2 * Math.PI * 15;
@@ -175,13 +178,13 @@ function renderTop() {
     <span class="when"><b>${G.clock(s.hour)}</b><small>${esc(G.dateLabel(s.day).replace(/ \d{4}$/, ''))} · Day ${s.day}</small></span>
     ${s.today.strike ? '<span class="alert">🚐 Strike</span>' : ''}${s.today.flood ? '<span class="alert">🌧 Floods</span>' : ''}`;
   $('#wallet').innerHTML = `<span class="coin" aria-hidden="true">₣</span><span><b>${n(s.cash)}</b>${s.bank ? `<small>Bank ${n(s.bank)}</small>` : ''}</span>`;
-  $('#meters').innerHTML = `${gauge('⚡', s.energy, 'Energy')}${gauge('❤️', s.health, 'Health')}${gauge('😊', s.happiness, 'Vibes')}${gauge('⭐', s.clout, 'Clout')}`;
-  $('#meters').setAttribute('aria-label', `Energy ${s.energy}, health ${s.health}, vibes ${s.happiness}, clout ${s.clout}`);
+  $('#meters').innerHTML = G.NEEDS.map((nd) => gauge(nd.icon, s[nd.id], nd.label)).join('');
+  $('#meters').setAttribute('aria-label', G.NEEDS.map((nd) => `${nd.label} ${Math.round(s[nd.id])}`).join(', '));
   $('.stage').dataset.time = timeOfDay(s.hour);
 }
 
 function renderTabs() {
-  for (const b of document.querySelectorAll('[data-tab]')) b.classList.toggle('on', b.dataset.tab === view);
+  for (const b of document.querySelectorAll('[data-tab]')) b.classList.toggle('on', b.dataset.tab === (view === 'lot' ? 'street' : view));
   const unread = G.unreadCount(s);
   $('#phone-badge').hidden = !unread;
   $('#phone-badge').textContent = unread;
@@ -215,7 +218,42 @@ function toast(text, tone = 'info') {
 
 // ---------- the stage ----------
 
-const BASE_OBJECTS = ['bed', 'chair', 'bucket'];
+const BASE_OBJECTS = ['bed', 'chair', 'bucket', 'toilet'];
+
+// Places you can walk into, and what each thing inside them does.
+let lotKind = null;
+const LOTS = {
+  maquis: { label: 'Maquis', sign: 'MAQUIS', color: '#c7362b', where: () => PLACES.maquis === s.area },
+  market: { label: 'Market', sign: 'MARCHÉ', color: '#009e60', where: () => Boolean(MARKETS[s.area]) },
+  beach: { label: 'Beach', sign: 'PLAGE', color: '#1f7ae0', where: () => PLACES.beach === s.area },
+};
+const LOT_OBJECTS = {
+  maquis: {
+    bar: { label: 'The bar', acts: ['maquisdrink'] },
+    dance: { label: 'Dance floor', acts: ['maquis'] },
+    table: { label: 'A table of regulars', acts: ['chat'] },
+    dj: { label: 'DJ booth', acts: ['maquis', 'audition'] },
+  },
+  market: {
+    stall: { label: 'Market stalls', acts: ['market'] },
+    garba: { label: 'Food stand', acts: ['eat', 'alloco'] },
+    wc: { label: 'Public toilet', acts: ['publictoilet'] },
+  },
+  beach: {
+    sea: { label: 'The sea', acts: ['swim'] },
+    umbrella: { label: 'Beach umbrella', acts: ['beach'] },
+    grill: { label: 'Fish grill', acts: ['eat'] },
+  },
+};
+// A city can rename a place (Dakar has dibiteries, not maquis).
+for (const [id, o] of Object.entries(T.lots ?? {})) Object.assign(LOTS[id], o);
+const doorsHere = () => Object.entries(LOTS).filter(([, l]) => l.where()).map(([id, l]) => ({ id, label: l.label, sign: l.sign, color: l.color }));
+
+function enterLot(kind) {
+  lotKind = kind;
+  view = 'lot';
+  render();
+}
 
 function renderStage() {
   $('#map-view').hidden = view !== 'map';
@@ -236,9 +274,13 @@ function renderStage() {
       : '<p>You have no home right now. Find a housing agent on the street and save up for the move-in fee.</p>';
     $('#go-home')?.addEventListener('click', () => openTravel(h.area));
   }
+  if (view === 'lot' && !LOTS[lotKind]?.where()) view = 'street';
   $('#place').innerHTML = view === 'home'
     ? `<b>🏠 ${esc(h ? h.name : 'No home')}</b><small>${esc(AREAS[h?.area ?? s.area].name)}</small>`
-    : `<b>📍 ${esc(AREAS[s.area].name)}</b><small>${esc(AREAS[s.area].blurb)}</small>`;
+    : view === 'lot'
+      ? `<b>${esc(LOTS[lotKind].label)} · ${esc(AREAS[s.area].name)}</b><small>Tap things to use them · tap people to talk</small>`
+      : `<b>📍 ${esc(AREAS[s.area].name)}</b><small>${esc(AREAS[s.area].blurb)}</small>`;
+  $('#leave').hidden = view !== 'lot';
   $('#hint').hidden = !(s.day <= 3 && msg.hidden);
   $('#hint').textContent = view === 'home' ? 'Tap the floor to walk · tap your things to use them' : 'Tap the ground to walk · tap a person to talk';
   stage?.setTime?.(s.hour);
@@ -249,20 +291,24 @@ function renderStage() {
       const owned = Object.keys(FURNITURE).filter((id) => G.owns(s, id) && id !== 'mattress' && id !== 'net');
       stage.showHome({ items: [...BASE_OBJECTS, ...owned], mattress: G.owns(s, 'mattress'), net: G.owns(s, 'net'), look: s.avatar, scene: SCENE });
     } else if (view === 'street') {
-      stage.showStreet({ area: { id: s.area, ...AREAS[s.area] }, look: s.avatar, scene: SCENE,
+      stage.showStreet({ area: { id: s.area, ...AREAS[s.area] }, look: s.avatar, scene: SCENE, doors: doorsHere(),
+        people: G.peopleHere(s).map((p) => ({ id: p.id, name: p.name, level: p.level, look: p.look })) });
+    } else if (view === 'lot') {
+      stage.showLot({ kind: lotKind, look: s.avatar,
         people: G.peopleHere(s).map((p) => ({ id: p.id, name: p.name, level: p.level, look: p.look })) });
     }
   } else {
     $('#stage2d').hidden = !msg.hidden;
     if (view === 'home' && atHome) renderHome();
-    else if (view === 'street') renderStreet();
+    else renderStreet();
   }
 }
 
 function initStage() {
   if (!has3D()) return;
   try {
-    stage = createStage($('#stage3d'), { onObject: openObject, onPerson: openPerson });
+    stage = createStage($('#stage3d'), { onObject: openObject, onPerson: openPerson, onDoor: enterLot });
+    window.frenzyStage = stage;
   } catch {
     stage = null;
   }
@@ -355,10 +401,11 @@ function openLife() {
   const inv = Object.entries(s.inventory).map(([k, v]) => `${v.qty} × ${GOODS[k].name}`);
   showModal('Your life', `
     <div class="welcome">${avatarSvg(s.avatar, { width: 64, label: s.name })}
-      <div><div class="name">${esc(s.name)}</div><div class="sub">${mood(s.happiness)} · Day ${s.day}</div>
+      <div><div class="name">${esc(s.name)}</div><div class="sub">${mood(G.moodScore(s))} · Day ${s.day}</div>
       <div class="sub">${s.traits.map((id) => `${TRAITS[id].icon} ${esc(TRAITS[id].name)}`).join(' · ')}</div></div></div>
     <div class="life-grid">
-      <div class="bars">${bar('Energy', s.energy)}${bar('Health', s.health)}${bar('Vibes', s.happiness)}${bar('Clout', s.clout, 'clout')}</div>
+      <div class="bars">${G.NEEDS.map((nd) => bar(`${nd.icon} ${nd.label}`, s[nd.id])).join('')}
+        ${bar('❤️ Health', s.health)}${bar('⭐ Clout', s.clout, 'clout')}<div class="sub">Mood ${G.moodScore(s)}/100 · ${mood(G.moodScore(s))}</div></div>
       <div class="stack">
         <div><b>${n(s.cash)}</b> cash · bank ${n(s.bank)}${s.crypto > 0 ? ` · crypto ${n(G.cryptoValue(s))}` : ''}</div>
         <div class="sub">Net worth ${n(G.netWorth(s))}</div>
@@ -456,6 +503,9 @@ const HOME_OBJECTS = {
   bed: { x: 62, y: 112, label: 'Bed', acts: ['sleep', 'nap', 'liein'] },
   chair: { x: 150, y: 124, icon: '🪑', label: 'Plastic chair', sit: true, acts: ['callmaman', 'daydream', 'whatsapp'] },
   bucket: { x: 326, y: 196, icon: '🪣', label: 'Bucket', acts: ['wash'] },
+  toilet: { x: 340, y: 140, icon: '🚽', label: 'Toilet', acts: ['toilet'] },
+  shower: { x: 300, y: 205, icon: '🚿', label: 'Shower', need: 'shower', acts: ['wash'] },
+  fridge: { x: 240, y: 92, icon: '🧊', label: 'Fridge', need: 'fridge', acts: ['snack'] },
   fan: { x: 112, y: 96, icon: '🌀', label: 'Standing fan', need: 'fan' },
   net: { x: 62, y: 84, icon: '🕸️', label: 'Mosquito net', need: 'net' },
   desk: { x: 214, y: 96, icon: '📚', label: 'Desk', need: 'desk', acts: ['study'] },
@@ -470,6 +520,8 @@ const HOME_OBJECTS = {
 const PERFORM = {
   sleep: ['💤', 'lying'], nap: ['💤', 'lying'], liein: ['📱', 'lying'], callmaman: ['📞'], daydream: ['✈️'],
   whatsapp: ['📱'], wash: ['💦'], study: ['📖'], cook: ['🍲'], relax: ['📺'], dance: ['🎵', 'dancing'], playdog: ['🎾'],
+  toilet: ['🚽'], publictoilet: ['🚽'], snack: ['🥤'], maquisdrink: ['🍗'], chat: ['💬'], swim: ['🏊🏾'], maquis: ['🎶', 'dancing'],
+  beach: ['😎'], eat: ['🍛'], alloco: ['🍢'], market: ['🧺'], audition: ['🎤', 'dancing'],
 };
 
 function renderHome() {
@@ -509,8 +561,9 @@ function renderHome() {
   bindObjects(svg, (id, x, y) => walkTo('home', x, Math.min(205, y + 22), () => openObject(id)));
 }
 
-function openObject(id) {
-  const o = HOME_OBJECTS[id];
+function openObject(id, where = 'home') {
+  const o = where === 'home' ? HOME_OBJECTS[id] : LOT_OBJECTS[where]?.[id];
+  if (!o) return;
   const list = G.actions(s);
   const acts = (o.acts ?? []).map((a) => (a === 'sleep'
     ? { id: 'sleep', label: 'Sleep (end the day)', desc: 'Restores energy overnight', blocked: null }
@@ -532,7 +585,7 @@ function openObject(id) {
       }
     };
     if (stage) {
-      const pose3d = pose === 'lying' ? 'lying' : HOME_OBJECTS[id].sit ? 'sitting' : pose === 'dancing' ? 'dancing' : 'idle';
+      const pose3d = pose === 'lying' ? 'lying' : o.sit ? 'sitting' : pose === 'dancing' ? 'dancing' : 'idle';
       stage.perform({ pose: pose3d, icon, objectId: id, ms: act === 'sleep' ? 1800 : 1400 }, finish);
       return;
     }
@@ -850,6 +903,8 @@ function openHelp() {
     <p>${esc(HELP.intro)} Your goal is the dream you picked: <strong>${esc(DREAMS[s.dream].blurb)}</strong></p>
     <h3>Each day</h3>
     <ul>
+      <li>Watch your <strong>needs</strong> on the left: hunger, energy, hygiene, bladder, fun and social. Eat, sleep, wash, use the toilet and see people to keep them up. A low need puts you in a bad mood, and a bad mood cuts your pay.</li>
+      <li>On the street, tap a door to go into the maquis, the market or the beach.</li>
       <li>Every action takes time. The day runs from 06h00 to midnight.</li>
       <li><strong>Eat</strong> every day or your health drops. Sleep at <strong>home</strong> to get your energy back. Sleeping rough is risky.</li>
       <li>${esc(HELP.transport)} Rush hours (07h–10h and 16h–20h) are slow.</li>
@@ -895,6 +950,7 @@ for (const b of document.querySelectorAll('[data-tab]')) {
   b.addEventListener('click', () => { view = b.dataset.tab; render(); });
 }
 $('#btn-do').addEventListener('click', openDo);
+$('#leave').addEventListener('click', () => { view = 'street'; render(); });
 $('#btn-phone').addEventListener('click', () => openPhone());
 $('#me').addEventListener('click', openLife);
 $('#wallet').addEventListener('click', openLife);
