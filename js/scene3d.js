@@ -198,22 +198,51 @@ export function makeCharacter(look) {
 const ROOM = { w: 10, d: 8 };
 
 // x, z position on the floor; `stand` is where you stand to use it; `rot` turns the object.
+// The home has three rooms: a bedroom (back left), a bathroom (front right) and a living room with a kitchen corner.
 export const HOME_LAYOUT = {
-  bed: { x: -3.6, z: -2.0, stand: [-2.2, -1.2] },
+  // Bedroom
+  bed: { x: -3.6, z: -2.4, stand: [-2.2, -1.0] },
   ac: { x: -3.6, z: -3.85 },
-  fan: { x: -2.3, z: -3.3, stand: [-1.9, -2.3] },
-  desk: { x: -0.6, z: -3.3, stand: [-0.6, -2.1] },
-  fridge: { x: 0.9, z: -3.45, stand: [0.9, -2.3] },
-  stove: { x: 2.2, z: -3.3, stand: [2.2, -2.1] },
-  tv: { x: 3.9, z: -3.3, stand: [3.6, -1.6] },
-  chair: { x: -0.8, z: -0.6, stand: [-0.8, -0.6], sit: true },
-  speaker: { x: 1.3, z: -0.9, stand: [1.3, 0.2] },
-  sofa: { x: 3.6, z: -0.6, rot: Math.PI, stand: [3.6, -0.6], sit: true },
-  toilet: { x: 4.4, z: 1.4, rot: -Math.PI / 2, stand: [3.4, 1.4] },
-  shower: { x: 4.0, z: 3.0, stand: [3.0, 2.6] },
-  dog: { x: 0.6, z: 1.9, stand: [1.4, 2.3] },
-  bucket: { x: 2.4, z: 3.3, stand: [2.4, 2.4] },
+  fan: { x: -1.7, z: -3.3, stand: [-1.8, -2.3] },
+  // Living room and kitchen corner
+  desk: { x: 1.0, z: -3.3, stand: [1.0, -2.1] },
+  fridge: { x: 2.6, z: -3.45, stand: [2.6, -2.3] },
+  stove: { x: 3.9, z: -3.3, stand: [3.9, -2.1] },
+  sofa: { x: 1.5, z: -0.6, rot: Math.PI / 2, stand: [1.5, -0.6], sit: true },
+  tv: { x: 4.4, z: -0.6, rot: -Math.PI / 2, stand: [3.2, -0.6] },
+  speaker: { x: 4.4, z: 0.8, stand: [3.6, 0.8] },
+  chair: { x: -0.2, z: 1.4, stand: [-0.2, 1.4], sit: true },
+  dog: { x: 0.8, z: 3.0, stand: [1.6, 3.2] },
+  // Bathroom
+  toilet: { x: 4.4, z: 2.1, rot: -Math.PI / 2, stand: [3.5, 2.1] },
+  shower: { x: 4.1, z: 3.3, stand: [3.3, 3.0] },
+  bucket: { x: 3.0, z: 3.6, stand: [3.0, 2.9] },
 };
+
+// Room shapes and doorways, used for walls, floors and walking through doors.
+export const HOME_ROOMS = {
+  bed: { label: '🛏️ Bedroom', centre: [-3.0, -1.4], door: { in: [-1.6, -0.5], out: [-0.4, -0.5] } },
+  bath: { label: '🚿 Bathroom', centre: [3.7, 2.8], door: { in: [3.1, 2.6], out: [1.9, 2.6] } },
+  living: { label: '🛋️ Living room', centre: [0.6, 0.4] },
+};
+export function roomAt(x, z) {
+  if (x < -1 && z < 0.5) return 'bed';
+  if (x > 2.5 && z > 1.5) return 'bath';
+  return 'living';
+}
+
+// The waypoints to walk from one spot to another, going through doorways rather than walls.
+export function homePath(from, to) {
+  const a = roomAt(from[0], from[1]);
+  const b = roomAt(to[0], to[1]);
+  if (a === b) return [to];
+  const pts = [];
+  if (a !== 'living') pts.push(HOME_ROOMS[a].door.in, HOME_ROOMS[a].door.out);
+  if (b !== 'living') pts.push(HOME_ROOMS[b].door.out, HOME_ROOMS[b].door.in);
+  pts.push(to);
+  return pts;
+}
+
 
 
 function furniture(id, opts) {
@@ -867,10 +896,83 @@ export function createStage(container, handlers) {
     // A wax-print rug and some plants.
     const rug = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 2.2), new THREE.MeshLambertMaterial({ map: waxTexture('#7b3fa0', 'kente') }));
     rug.rotation.x = -Math.PI / 2;
-    rug.position.set(-0.4, 0.015, 0.6);
+    rug.position.set(-0.6, 0.015, 2.5);
     rug.receiveShadow = true;
     scene.add(rug);
-    scene.add(pottedPlant(-4.4, 0.4), pottedPlant(4.6, -2.2, 0.8), pottedPlant(-4.4, 3.4, 1.1));
+    scene.add(pottedPlant(-4.4, -0.2), pottedPlant(-0.5, -3.5, 0.8), pottedPlant(-4.4, 3.4, 1.1));
+    buildRooms(cfg);
+  }
+
+  // Low cutaway walls (Sims style) split the home into rooms; each room gets its own floor.
+  function buildRooms(cfg) {
+    const wallColor = new THREE.Color(cfg.scene?.wall ?? '#c8553d').lerp(new THREE.Color('#f1e3cf'), 0.35);
+    const wallMat = lambert(wallColor);
+    const cap = lambert('#f1e3cf');
+    const H = 1.25;
+    const wallX = (x, z0, z1) => {
+      scene.add(box(0.14, H, z1 - z0, wallMat, x, H / 2, (z0 + z1) / 2));
+      scene.add(box(0.2, 0.06, z1 - z0, cap, x, H + 0.03, (z0 + z1) / 2));
+    };
+    const wallZ = (z, x0, x1) => {
+      scene.add(box(x1 - x0, H, 0.14, wallMat, (x0 + x1) / 2, H / 2, z));
+      scene.add(box(x1 - x0, 0.06, 0.2, cap, (x0 + x1) / 2, H + 0.03, z));
+    };
+    // Bedroom: walls on its right and front, with a doorway on the right.
+    wallX(-1, -ROOM.d / 2, -1.0);
+    wallX(-1, 0.0, 0.5);
+    wallZ(0.5, -ROOM.w / 2, -0.93);
+    // Bathroom: walls on its left and back, with a doorway on the left.
+    wallX(2.5, 1.5, 2.2);
+    wallX(2.5, 3.0, ROOM.d / 2);
+    wallZ(1.5, 2.43, ROOM.w / 2);
+    // Floors: wooden boards in the bedroom, blue-and-white tiles in the bathroom.
+    const floorPatch = (x0, x1, z0, z1, tex) => {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, z1 - z0), new THREE.MeshLambertMaterial({ map: tex }));
+      m.rotation.x = -Math.PI / 2;
+      m.position.set((x0 + x1) / 2, 0.01, (z0 + z1) / 2);
+      m.receiveShadow = true;
+      scene.add(m);
+    };
+    const boards = canvasTexture(64, 64, (g) => {
+      for (let i = 0; i < 4; i++) {
+        g.fillStyle = ['#b07a45', '#a06c3b', '#b8844f', '#9c6636'][i];
+        g.fillRect(0, i * 16, 64, 16);
+        g.fillStyle = 'rgba(0,0,0,0.18)';
+        g.fillRect(0, i * 16 + 15, 64, 1);
+        g.fillRect((i * 23) % 64, i * 16, 1, 16);
+      }
+    });
+    boards.wrapS = boards.wrapT = THREE.RepeatWrapping;
+    boards.repeat.set(2, 2.2);
+    floorPatch(-ROOM.w / 2, -1, -ROOM.d / 2, 0.5, boards);
+    floorPatch(2.5, ROOM.w / 2, 1.5, ROOM.d / 2, checkerTexture('#e8f4fb', '#7cc0e4', [2.5, 2.5]));
+    // A bedside mat and a bath mat.
+    const mat = (x, z, w, d, color) => {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), lambert(color));
+      m.rotation.x = -Math.PI / 2;
+      m.position.set(x, 0.02, z);
+      scene.add(m);
+    };
+    mat(-2.2, -1.2, 0.9, 1.4, '#c7362b');
+    mat(3.3, 2.6, 0.8, 0.6, '#ffffff');
+    // A mirror and towel in the bathroom, and a wardrobe in the bedroom.
+    scene.add(box(0.6, 0.8, 0.05, lambert('#cfe8f5', { emissive: '#3a5866' }), 3.8, 1.75, 1.6 + 0.08));
+    scene.add(box(0.06, 0.6, 0.35, lambert('#f77f00'), ROOM.w / 2 - 0.05, 1.2, 2.6));
+    const wardrobe = new THREE.Group();
+    wardrobe.add(box(1.4, 2.0, 0.6, lambert('#7a4f2e'), 0, 1.0, 0));
+    wardrobe.add(box(0.02, 1.8, 0.62, lambert('#5a3a22'), 0, 1.0, 0));
+    wardrobe.add(box(0.05, 0.2, 0.05, lambert('#e8b100'), -0.12, 1.0, 0.32), box(0.05, 0.2, 0.05, lambert('#e8b100'), 0.12, 1.0, 0.32));
+    wardrobe.rotation.y = Math.PI / 2;
+    wardrobe.position.set(-ROOM.w / 2 + 0.35, 0, -0.6);
+    scene.add(wardrobe);
+    // Labels you can tap to walk into a room.
+    for (const r of Object.values(HOME_ROOMS)) {
+      const anchor = new THREE.Object3D();
+      anchor.position.set(r.centre[0], 0, r.centre[1]);
+      scene.add(anchor);
+      addTag(r.label, anchor, 0.1, () => walkTo(r.centre[0], r.centre[1]));
+      tags[tags.length - 1].el.classList.add('room-tag');
+    }
   }
 
   function showHome(cfg) {
@@ -1020,19 +1122,28 @@ export function createStage(container, handlers) {
 
   // ----- movement and poses -----
 
+  let path = [];
+
   function walkTo(x, z, done) {
     if (!player) return;
     resetPose();
-    target = new THREE.Vector3(
-      Math.max(bounds.x[0], Math.min(bounds.x[1], x)), 0, Math.max(bounds.z[0], Math.min(bounds.z[1], z)));
+    const to = [Math.max(bounds.x[0], Math.min(bounds.x[1], x)), Math.max(bounds.z[0], Math.min(bounds.z[1], z))];
+    const pts = sceneKind === 'home' ? homePath([player.position.x, player.position.z], to) : [to];
+    path = pts.slice(1).map(([px, pz]) => new THREE.Vector3(px, 0, pz));
+    target = new THREE.Vector3(pts[0][0], 0, pts[0][1]);
     arrive = done ?? null;
     if (reduce()) {
-      player.position.copy(target);
+      player.position.set(to[0], 0, to[1]);
+      path = [];
       finishWalk();
     }
   }
 
   function finishWalk() {
+    if (path.length) {
+      target = path.shift();
+      return;
+    }
     target = null;
     const parts = player.userData.parts;
     for (const l of parts.legs) l.rotation.x = 0;
@@ -1063,8 +1174,9 @@ export function createStage(container, handlers) {
       player.position.set(spot.x, cfgBedTop(), spot.z + 0.95);
       player.rotation.set(-Math.PI / 2, 0, 0);
     } else if (next === 'sitting' && spot) {
-      player.position.set(spot.x, 0.1, spot.z + (spot.rot ? -0.05 : 0.05));
-      player.rotation.y = spot.rot ? Math.PI : 0;
+      const r = spot.rot ?? 0;
+      player.position.set(spot.x + Math.sin(r) * 0.05, 0.1, spot.z + Math.cos(r) * 0.05);
+      player.rotation.y = r;
       for (const l of p.legs) l.rotation.x = -Math.PI / 2;
       player.position.y = 0.12;
     } else if (spot) {

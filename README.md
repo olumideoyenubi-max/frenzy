@@ -47,6 +47,13 @@ Every game starts with a short setup, inspired by Lagos Life:
 Furnish your home from a catalogue (mattress, mosquito net, fan, gas stove, TV, a dog called Drogba, air conditioning and more).
 Each piece has a real effect on sleep, meals, learning or mood, and it moves with you when you change house.
 
+## Your home
+
+Your home is split into three rooms with low cutaway walls, like The Sims: a **bedroom** (wooden floor, bed, wardrobe,
+fan and air conditioner), a **bathroom** (blue-and-white tiles, toilet, shower, bucket, mirror and towel) and a
+**living room with a kitchen corner** (sofa facing the TV, plastic chair, desk under the window, fridge and gas stove,
+speaker, rug and the dog). Your character walks through the doorways, never through walls. Tap a room's name to walk there.
+
 ## Needs and places (inspired by The Sims and FreeSims)
 
 - **Six needs:** hunger, energy, hygiene, bladder, fun and social drain as the clock moves. Your mood is built from

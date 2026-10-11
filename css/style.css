@@ -852,3 +852,6 @@ dialog { overflow: auto; }
   .place { width: max-content; max-width: calc(100% - 24px); }
   .place b { display: block; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 }
+
+/* Room names on the home floor plan */
+.stage-tag.room-tag { transform-origin: center; background: color-mix(in srgb, var(--panel) 72%, transparent); font-size: 0.72rem; opacity: 0.92; }
