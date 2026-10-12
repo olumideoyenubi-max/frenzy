@@ -3,7 +3,7 @@
 import {
   AREAS, ROADS, GOODS, MARKETS, JOBS, HOUSES, MOVE_IN_MONTHS, JAPA,
   TRAITS, DREAMS, BACKGROUNDS, STARTS, AVATAR, FURNITURE, PEOPLE, STREET_LINES, TRANSPORT, BRAND, MAP, SCENE, T, HELP, SHOP_AREA, CITY_ID,
-  PLACES,
+  PLACES, MONEY,
 } from './data.js';
 import * as G from './engine.js';
 import { has3D, createStage } from './scene3d.js';
@@ -132,7 +132,7 @@ function chipsFor(desc = '') {
     else if (/^free$/i.test(seg) || /^No time cost$/.test(seg)) cls = 'free';
     else if (/^\+|^earn|^could pay|^Earn/.test(seg)) cls = 'gain';
     else if (/^-/.test(seg)) cls = 'drain';
-    else if (/FCFA/.test(seg) && !/earn/.test(seg)) { cls = 'cost'; txt = `💰 ${seg}`; }
+    else if (seg.includes(MONEY.code) && !/earn/.test(seg)) { cls = 'cost'; txt = `💰 ${seg}`; }
     return `<span class="chip-s ${cls}">${esc(txt)}</span>`;
   }).join('');
 }
@@ -794,7 +794,7 @@ function openFurnish() {
 }
 
 function moneyForm(prefix) {
-  return `<div class="money-input"><input type="number" min="0" step="1000" inputmode="numeric" id="${prefix}-amt" placeholder="Amount in FCFA">`;
+  return `<div class="money-input"><input type="number" min="0" step="1000" inputmode="numeric" id="${prefix}-amt" placeholder="Amount in ${MONEY.code}">`;
 }
 
 function openBank() {
@@ -805,7 +805,7 @@ function openBank() {
       <button data-dep>Deposit</button><button data-wd>Withdraw</button>
     </div>
     <div class="money-input"><button class="primary" data-depall>Deposit all cash</button><button data-wdall>Withdraw all</button></div>`);
-  const amt = () => Number($('#bank-amt').value) || 0;
+  const amt = () => G.fromMoney(Number($('#bank-amt').value) || 0);
   wire('[data-dep]', () => { G.deposit(s, amt()); refresh(openBank); });
   wire('[data-wd]', () => { G.withdraw(s, amt()); refresh(openBank); });
   wire('[data-depall]', () => { G.deposit(s, s.cash); refresh(openBank); });
@@ -861,7 +861,7 @@ function openPhone(app = null) {
       <p class="sub">The price moves every night. It can fly, and it can crash. Don't put your rent money in.</p>
       ${moneyForm('coin')}<button data-cbuy>Buy</button></div>
       <div class="money-input"><button data-csell="0.5" ${s.crypto ? '' : 'disabled'}>Sell half</button><button class="primary" data-csell="1" ${s.crypto ? '' : 'disabled'}>Sell all</button></div>`);
-    wire('[data-cbuy]', () => { G.buyCrypto(s, Number($('#coin-amt').value) || 0); refresh(() => openPhone('coin')); });
+    wire('[data-cbuy]', () => { G.buyCrypto(s, G.fromMoney(Number($('#coin-amt').value) || 0)); refresh(() => openPhone('coin')); });
     wire('[data-csell]', (el) => { G.sellCrypto(s, Number(el.dataset.csell)); refresh(() => openPhone('coin')); });
   } else if (app === 'rich') {
     view(T.richTitle, `<ol class="rich">${G.richList(s).map((r) => `<li class="${r.you ? 'you' : ''}"><span><strong>${esc(r.name)}</strong><small class="sub"> · ${esc(r.source)}</small></span><span>${n(r.worth)}</span></li>`).join('')}</ol>`);

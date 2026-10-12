@@ -4,7 +4,7 @@
 import {
   AREAS, TRANSPORT, JOBS, GOODS, MARKETS, HOUSES, MOVE_IN_MONTHS, ADVANCE_DAYS, ITEMS, SHOP_AREA,
   JAPA, GEN_FUEL, CARRY, TRAITS, DREAMS, BACKGROUNDS, STARTS, AVATAR, FURNITURE,
-  PEOPLE, LEVELS, BUSINESSES, STAFF, BRAND, DEFAULT_START, PLACES, RAINY_MONTHS, T, GIST, FRIEND_TEXTS, RICH,
+  PEOPLE, LEVELS, BUSINESSES, STAFF, BRAND, MONEY, CITY_EVENTS, DEFAULT_START, PLACES, RAINY_MONTHS, T, GIST, FRIEND_TEXTS, RICH,
 } from './data.js';
 
 const START_DATE = Date.UTC(2026, 0, 5); // Day 1 is Monday, 5 January 2026
@@ -43,11 +43,18 @@ function hash01(...parts) {
 const clamp = (v, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, v));
 const roundTo = (v, step) => Math.round(v / step) * step;
 
+// Formats an amount for display. The game counts in CFA francs internally; a city with another
+// currency (Rwandan francs in Kigali) converts with its rate.
 export function cfa(n) {
   const sign = n < 0 ? '-' : '';
-  const digits = String(Math.round(Math.abs(n))).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-  return `${sign}${digits} FCFA`;
+  const v = Math.abs(n) * MONEY.rate;
+  const shown = MONEY.rate === 1 ? Math.round(v) : Math.round(v / 10) * 10;
+  const digits = String(shown).replace(/\B(?=(\d{3})+(?!\d))/g, '\u202f');
+  return `${sign}${digits} ${MONEY.code}`;
 }
+
+// Turns an amount the player typed (in the local currency) into the game's internal units.
+export const fromMoney = (x) => x / MONEY.rate;
 
 export function clock(hour) {
   const h = Math.floor(hour) % 24;
@@ -521,7 +528,7 @@ export function actions(s) {
     add('jobs', 'Look for work here', `1h · ${openings.map((j) => j.title).join(', ')}`, { hours: 1, group: 'work' });
   }
   if (at(PLACES.hawk, a)) {
-    add('hawk', T.act.hawk, `3h · earn about ${hasTrait(s, 'hustler') ? '1,250–2,500' : '1,000–2,000'} FCFA · -20 energy`, { hours: 3, energy: 20, from: 7, until: 21, group: 'work' });
+    add('hawk', T.act.hawk, `3h · earn about ${hasTrait(s, 'hustler') ? `${cfa(1250)}–${cfa(2500)}` : `${cfa(1000)}–${cfa(2000)}`} · -20 energy`, { hours: 3, energy: 20, from: 7, until: 21, group: 'work' });
   }
   if (s.items.smartphone) {
     add('skit', T.act.skit, '3h · +clout, small chance to go viral · -15 energy', { hours: 3, energy: 15, group: 'work' });
@@ -700,7 +707,7 @@ export function act(s, id) {
     case 'publictoilet':
       s.bladder = 100;
       addStat(s, 'hygiene', -3);
-      log(s, 'You paid 100 FCFA for the public toilet. It was not the cleanest, but it did the job.');
+      log(s, `You paid ${cfa(100)} for the public toilet. It was not the cleanest, but it did the job.`);
       break;
     case 'snack':
       feed(s, 25);
@@ -751,7 +758,7 @@ export function act(s, id) {
       addStat(s, 'happiness', 8);
       if (rand(s) < (s.cash < 5000 ? 0.5 : 0.2)) {
         s.cash += 5000;
-        log(s, T.log.mamanSends, 'good');
+        log(s, typeof T.log.mamanSends === 'function' ? T.log.mamanSends(cfa(5000)) : T.log.mamanSends, 'good');
       } else {
         log(s, T.log.mamanNews);
       }
@@ -1103,13 +1110,13 @@ const EVENTS = [
   {
     id: 'lotto', weight: 2,
     setup: () => ({}),
-    text: () => T.ev.lotto,
+    text: () => (typeof T.ev.lotto === 'function' ? T.ev.lotto(cfa(500)) : T.ev.lotto),
     options: [
       { label: 'Play', ok: (s) => s.cash >= 500,
         apply: (s) => { s.cash -= 500;
-          if (rand(s) < 0.05) { s.cash += 100000; addStat(s, 'happiness', 20); return ['Jackpot! You won 100,000 FCFA!', 'good']; }
+          if (rand(s) < 0.05) { s.cash += 100000; addStat(s, 'happiness', 20); return [`Jackpot! You won ${cfa(100000)}!`, 'good']; }
           return ['No luck today.', 'info']; } },
-      { label: 'Walk past', apply: () => ['You kept your 500 FCFA.', 'info'] },
+      { label: 'Walk past', apply: () => [`You kept your ${cfa(500)}.`, 'info'] },
     ],
   },
   {
@@ -1167,7 +1174,7 @@ const EVENTS = [
 ];
 
 function rollEvent(s) {
-  const pool = EVENTS.filter((e) => !e.when || e.when(s));
+  const pool = [...EVENTS, ...CITY_EVENTS.map(cityEvent)].filter((e) => !e.when || e.when(s));
   const total = pool.reduce((n, e) => n + e.weight, 0);
   let r = rand(s) * total;
   const ev = pool.find((e) => (r -= e.weight) < 0) ?? pool[0];
@@ -1175,15 +1182,47 @@ function rollEvent(s) {
   s.pendingEvent = { id: ev.id, data, text: ev.text(data) };
 }
 
+const findEvent = (id) => EVENTS.find((e) => e.id === id) ?? cityEvent(CITY_EVENTS.find((e) => e.id === id));
+
+// A city's own events are plain data: when they can happen, the text, and each option's cost and effects.
+const cityEventCache = new Map();
+function cityEvent(e) {
+  if (cityEventCache.has(e.id)) return cityEventCache.get(e.id);
+  const ev = {
+    id: e.id,
+    weight: e.weight ?? 1,
+    when: (s) => {
+      const d = dateOf(s.day);
+      if (e.weekday !== undefined && d.getUTCDay() !== e.weekday) return false;
+      // The last such weekday of the month: a week later is already next month.
+      if (e.lastOfMonth && dateOf(s.day + 7).getUTCMonth() === d.getUTCMonth()) return false;
+      return true;
+    },
+    setup: () => ({}),
+    text: () => e.text,
+    options: e.options.map((o) => ({
+      label: o.cost ? `${o.label} (${cfa(o.cost)})` : o.label,
+      ok: o.cost ? (s) => s.cash >= o.cost : undefined,
+      apply: (s) => {
+        if (o.cost) s.cash -= o.cost;
+        for (const [k, v] of Object.entries(o.fx ?? {})) addStat(s, k, v);
+        return [o.text, o.tone ?? 'info'];
+      },
+    })),
+  };
+  cityEventCache.set(e.id, ev);
+  return ev;
+}
+
 export function eventOptions(s) {
   if (!s.pendingEvent) return [];
-  const ev = EVENTS.find((e) => e.id === s.pendingEvent.id);
+  const ev = findEvent(s.pendingEvent.id);
   return ev.options.map((o) => ({ label: o.label, blocked: o.ok && !o.ok(s, s.pendingEvent.data) ? 'Not enough cash' : null }));
 }
 
 export function resolveEvent(s, index) {
   if (!s.pendingEvent) return false;
-  const ev = EVENTS.find((e) => e.id === s.pendingEvent.id);
+  const ev = findEvent(s.pendingEvent.id);
   const opt = ev.options[index];
   if (!opt || (opt.ok && !opt.ok(s, s.pendingEvent.data))) return false;
   const [text, tone] = opt.apply(s, s.pendingEvent.data);
@@ -1203,9 +1242,9 @@ export const GOALS = [
   { id: 'furniture', label: 'Buy furniture for your home' },
   { id: 'moved', label: 'Move into a better place' },
   { id: 'generator', label: 'Buy a generator' },
-  { id: 'half', label: 'Net worth of 500,000 FCFA' },
+  { id: 'half', label: `Net worth of ${cfa(500000)}` },
   { id: 'car', label: 'Own a car' },
-  { id: 'fiveMillion', label: 'Net worth of 5 million FCFA' },
+  { id: 'fiveMillion', label: `Net worth of ${cfa(5000000)}` },
   { id: 'friend', label: T.goalFriend },
 ];
 
@@ -1364,7 +1403,7 @@ function doFavour(s, id) {
   const p = PEOPLE[id];
   if (p.perk === 'loan') {
     s.cash += 20000;
-    log(s, `${p.name} slipped you 20,000 FCFA. "Pay me back when things are better."`, 'good');
+    log(s, `${p.name} slipped you ${cfa(20000)}. "Pay me back when things are better."`, 'good');
   } else if (p.perk === 'tech') {
     addSkill(s, 'tech', 4);
     log(s, `You studied algorithms with ${p.name} at the university library. +4 tech.`, 'good');

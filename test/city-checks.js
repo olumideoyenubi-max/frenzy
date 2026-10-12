@@ -9,7 +9,7 @@ export function checkCity(G, D) {
 
   test(`${D.BRAND.name}: every reference points at a real place`, () => {
     for (const [a, b] of D.ROADS) { inCity(a, 'road'); inCity(b, 'road'); }
-    for (const [k, v] of Object.entries(D.PLACES)) for (const a of [v].flat()) inCity(a, `place ${k}`);
+    for (const [k, v] of Object.entries(D.PLACES)) for (const a of [v].flat().filter(Boolean)) inCity(a, `place ${k}`);
     for (const [id, j] of Object.entries(D.JOBS)) if (j.area) inCity(j.area, `job ${id}`);
     for (const [id, h] of Object.entries(D.HOUSES)) inCity(h.area, `house ${id}`);
     for (const [id, p] of Object.entries(D.PEOPLE)) inCity(p.area, `person ${id}`);

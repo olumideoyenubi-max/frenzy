@@ -417,10 +417,10 @@ function streetProps(scene, area, colors = {}, anims = []) {
           scene.add(box(0.5, 0.06, 0.12, lambert('#f4f1ea'), cx + dx, fy - 0.3, -2.74));
         }
       }
-      const shops = ['BOUTIQUE', 'COIFFURE', 'CABINE', 'PHARMACIE', 'ALIMENTATION', 'COUTURE', 'TELEPHONE'];
+      const shops = colors.shops ?? ['BOUTIQUE', 'COIFFURE', 'CABINE', 'PHARMACIE', 'ALIMENTATION', 'COUTURE', 'TELEPHONE'];
       const shop = shops[(i + seed) % shops.length];
       const sign = new THREE.Mesh(new THREE.PlaneGeometry(Math.min(1.6, w - 0.4), 0.32),
-        new THREE.MeshLambertMaterial({ map: signTexture(shop, shop === 'PHARMACIE' ? '#00a651' : awnings[(i + seed + 1) % awnings.length]) }));
+        new THREE.MeshLambertMaterial({ map: signTexture(shop, /^PHARMAC/.test(shop) ? '#00a651' : awnings[(i + seed + 1) % awnings.length]) }));
       sign.position.set(cx, 1.78, -2.77);
       scene.add(sign);
       if (h > 2.6) {
@@ -856,6 +856,24 @@ export function createStage(container, handlers) {
     // Pictures: the national flag, and a family photo.
     const [c1, c2, c3] = cfg.scene?.flag ?? ['#f77f00', '#ffffff', '#009e60'];
     const flag = framedPicture((g, w, h) => {
+      if (cfg.scene?.flagStyle === 'horizontal') {
+        // Rwanda: a wide blue band with a golden sun, then yellow and green.
+        g.fillStyle = c1; g.fillRect(0, 0, w, h / 2);
+        g.fillStyle = c2; g.fillRect(0, h / 2, w, h / 4);
+        g.fillStyle = c3; g.fillRect(0, h * 0.75, w, h / 4);
+        g.fillStyle = cfg.scene.flagSun ?? '#fad201';
+        g.strokeStyle = g.fillStyle;
+        g.lineWidth = 1.5;
+        g.beginPath(); g.arc(w * 0.8, h * 0.22, 6, 0, Math.PI * 2); g.fill();
+        for (let k = 0; k < 24; k++) {
+          const a = (k / 24) * Math.PI * 2;
+          g.beginPath();
+          g.moveTo(w * 0.8 + 7 * Math.cos(a), h * 0.22 + 7 * Math.sin(a));
+          g.lineTo(w * 0.8 + 13 * Math.cos(a), h * 0.22 + 13 * Math.sin(a));
+          g.stroke();
+        }
+        return;
+      }
       g.fillStyle = c1; g.fillRect(0, 0, w / 3, h);
       g.fillStyle = c2; g.fillRect(w / 3, 0, w / 3, h);
       g.fillStyle = c3; g.fillRect(2 * w / 3, 0, w / 3, h);

@@ -3,8 +3,9 @@
 
 import * as abidjan from './cities/abidjan.js';
 import * as dakar from './cities/dakar.js';
+import * as kigali from './cities/kigali.js';
 
-const PACKS = { abidjan, dakar };
+const PACKS = { abidjan, dakar, kigali };
 export const CITY_ID = PACKS[globalThis.FRENZY_CITY] ? globalThis.FRENZY_CITY : 'abidjan';
 const P = PACKS[CITY_ID];
 
@@ -13,3 +14,7 @@ export const {
   GEN_FUEL, CARRY, TRAITS, DREAMS, BACKGROUNDS, STARTS, AVATAR, FURNITURE, PEOPLE, LEVELS, BUSINESSES, STAFF,
   STREET_LINES, BRAND, DEFAULT_START, PLACES, RAINY_MONTHS, MAP, SCENE, T, GIST, FRIEND_TEXTS, RICH, HELP,
 } = P;
+
+// Optional parts of a pack.
+export const MONEY = P.MONEY ?? { code: 'FCFA', rate: 1 };
+export const CITY_EVENTS = P.CITY_EVENTS ?? [];

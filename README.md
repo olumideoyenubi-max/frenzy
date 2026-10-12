@@ -11,6 +11,7 @@ The same game engine runs two cities:
 | --- | --- | --- |
 | **Babi Frenzy** · Abidjan, Côte d'Ivoire | `index.html` | `js/cities/abidjan.js` |
 | **Dakar Frenzy** · Dakar, Senegal | `dakar.html` | `js/cities/dakar.js` |
+| **Kigali Frenzy** · Kigali, Rwanda | `kigali.html` | `js/cities/kigali.js` |
 
 **Dakar Frenzy** starts you in a family house in Parcelles Assainies (or the UCAD residence, or your aunt's mat in Pikine)
 and your dream can be a villa in Les Almadies. Get around by car rapide, Ndiaga Ndiaye minibus, the BRT, the TER train,
@@ -18,6 +19,14 @@ Jakarta moto-taxi or a yellow-and-black taxi. Sell café Touba in traffic, eat t
 thiof from Yoff, onions from Pikine and bazin from Médina, dance at a sabar night, play navétanes football, train with
 wrestlers on the beach and befriend Adja Fatou, DJ Babacar, Lamine the fisherman and more. SENELEC cuts the power, the
 lottery is LONASE, and the interface uses Senegal's gold.
+
+**Kigali Frenzy** starts you in a shared house in Nyamirambo (or a student hostel in town, or your aunt's mat in
+Gikondo) and your dream can be a villa in Nyarutarama. Prices are in Rwandan francs. Get around by city bus with a
+Tap&Go card, moto-taxi (with helmets), electric bike up the hills, ride-app taxi or your own car. Do bicycle deliveries,
+eat buffet lunches and brochettes, trade tomatoes, potatoes and matoke from Nyabugogo and kitenge from Kimironko, join
+Umuganda community work on the last Saturday of the month and aerobics on Car Free Day, and befriend Mama Gisele,
+DJ Pius, Claudine at the milk bar and more. There's no beach in Kigali, so its places to visit are the brochette bar
+and the market (ISOKO). The interface uses Rwanda's sky blue, yellow and green.
 
 A city pack holds everything that makes a city: neighbourhoods and map, transport, jobs, goods, housing, people, events
 and all the everyday text. `js/data.js` picks the pack a page asks for with `globalThis.FRENZY_CITY`.
@@ -85,7 +94,7 @@ speaker, rug and the dog). Your character walks through the doorways, never thro
 ## Play
 
 ```bash
-npm start          # Babi Frenzy: http://localhost:8080 · Dakar Frenzy: http://localhost:8080/dakar.html
+npm start          # Babi: http://localhost:8080 · Dakar: /dakar.html · Kigali: /kigali.html
 ```
 
 No install or build step. It's plain HTML, CSS and JavaScript modules, so any static host works, including GitHub Pages.

@@ -855,3 +855,14 @@ dialog { overflow: auto; }
 
 /* Room names on the home floor plan */
 .stage-tag.room-tag { transform-origin: center; background: color-mix(in srgb, var(--panel) 72%, transparent); font-size: 0.72rem; opacity: 0.92; }
+
+/* Kigali Frenzy uses Rwanda's sky blue, with the flag's blue, yellow and green. */
+:root[data-city="kigali"] { --accent: #00a1de; --accent-ink: #ffffff; --accent-soft: #d9f1fb; }
+@media (prefers-color-scheme: dark) {
+  :root[data-city="kigali"]:not([data-theme="light"]) { --accent-soft: #10303d; }
+}
+:root[data-city="kigali"][data-theme="dark"] { --accent-soft: #10303d; }
+:root[data-city="kigali"] .tabbar .do { background: radial-gradient(circle at 35% 30%, #9fe3ff 0%, var(--accent) 45%, #006f9a 100%); box-shadow: 0 6px 18px rgba(0, 161, 222, 0.45), 0 0 0 5px var(--glass); }
+:root[data-city="kigali"] .modal-inner::before {
+  background: repeating-linear-gradient(90deg, #00a1de 0 24px, #fad201 24px 36px, #20603d 36px 48px);
+}
