@@ -312,6 +312,9 @@ export const SCENE = {
   // Orange metered taxis, green woro-woros, a white car and a red one.
   traffic: ['#f77f00', '#2e8b3e', '#e8e8e8', '#c7362b'],
   flag: ['#f77f00', '#ffffff', '#009e60'],
+  // A couple of moto-taxis among the cars.
+  motos: 1,
+  motoVest: '#f77f00',
 };
 
 // Everyday text, kept here so another city can tell its own story.

@@ -268,6 +268,7 @@ export const SCENE = {
   traffic: ['#f2c200', '#eeeeee', '#1f5fbf', '#c7362b'],
   flag: ['#00853f', '#fdef42', '#e31b23'],
   flagStar: '#00853f',
+  trees: 'baobab',
 };
 
 export const T = {

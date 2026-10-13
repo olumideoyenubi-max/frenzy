@@ -266,6 +266,12 @@ export const SCENE = {
   flagStyle: 'horizontal',
   flagSun: '#fad201',
   shops: ['SUPERMARKET', 'SALON', 'MOMO', 'PHARMACY', 'BOUTIQUE', 'TAILOR', 'AIRTIME'],
+  trees: 'jacaranda',
+  backdrop: 'hills',
+  flowerBeds: true,
+  motos: 3,
+  motoVest: '#20603d',
+  homeArt: 'imigongo',
 };
 
 export const T = {

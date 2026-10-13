@@ -386,6 +386,83 @@ function passerby(i) {
   return makeCharacter(looks[i % looks.length]);
 }
 
+function addTree(scene, kind, x, z, s = 1) {
+  const g = new THREE.Group();
+  if (kind === 'baobab') {
+    g.add(cyl(0.55, 0.75, 2.4, lambert('#9a8270'), 0, 1.2, 0, 12));
+    for (const [a, l] of [[0.4, 1.1], [2.1, 0.9], [3.8, 1.2], [5.2, 0.8]]) {
+      const br = cyl(0.12, 0.2, l, lambert('#9a8270'), Math.cos(a) * 0.45, 2.6, Math.sin(a) * 0.45, 8);
+      br.rotation.z = Math.cos(a) * 0.7;
+      br.rotation.x = -Math.sin(a) * 0.7;
+      g.add(br);
+      g.add(ball(0.32, lambert('#6f8f3a'), Math.cos(a) * 0.95, 3.0, Math.sin(a) * 0.95));
+    }
+  } else if (kind === 'jacaranda') {
+    g.add(cyl(0.1, 0.16, 1.8, lambert('#6b4a33'), 0, 0.9, 0, 8));
+    for (const [dx, dy, dz, r] of [[0, 2.2, 0, 0.75], [0.5, 2.0, 0.2, 0.55], [-0.45, 2.05, -0.15, 0.55], [0.1, 2.6, -0.2, 0.5]]) {
+      g.add(ball(r, lambert(['#9a6fd1', '#b48ae0', '#8457c2'][Math.round(r * 10) % 3]), dx, dy, dz));
+    }
+  } else if (kind === 'banana') {
+    g.add(cyl(0.1, 0.13, 1.3, lambert('#7c8f3a'), 0, 0.65, 0, 8));
+    for (let k = 0; k < 5; k++) {
+      const leaf = box(1.1, 0.04, 0.4, lambert(k % 2 ? '#3fa34d' : '#2e8b3e'), 0, 1.35, 0);
+      leaf.rotation.y = k * (Math.PI * 2 / 5);
+      leaf.rotation.z = -0.5;
+      leaf.translateX(0.45);
+      g.add(leaf);
+    }
+  } else {
+    g.add(cyl(0.12, 0.18, 2.6, lambert('#8a6a45'), 0, 1.3, 0));
+    for (let k = 0; k < 6; k++) {
+      const leaf = box(1.4, 0.05, 0.35, lambert('#2e8b3e'), 0, 2.6, 0);
+      leaf.rotation.y = k * Math.PI / 3;
+      leaf.rotation.z = -0.35;
+      leaf.translateX(0.6);
+      g.add(leaf);
+    }
+  }
+  g.position.set(x, 0, z);
+  g.scale.setScalar(s);
+  scene.add(g);
+}
+
+function addHills(scene, seed, withDome) {
+  const hillColors = ['#5f9e4a', '#4f8f3e', '#6fae55'];
+  const roofs = ['#b5452f', '#c45a3a', '#e8e1d2', '#8a8a8a'];
+  [[-9, 4.6, 3.6], [-3, 5.0, 4.6], [3.5, 4.4, 3.8]].forEach(([hx, r, h], i) => {
+    const hill = new THREE.Mesh(new THREE.SphereGeometry(r, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), lambert(hillColors[i]));
+    hill.scale.y = h / r;
+    hill.position.set(hx, -0.2, -7.2);
+    hill.receiveShadow = true;
+    scene.add(hill);
+    // Little houses dotted up the hillside.
+    for (let k = 0; k < 14; k++) {
+      const a = ((Math.sin(seed + k * 12.9 + i * 7) + 1) / 2) * Math.PI - Math.PI / 2;
+      const rr = r * (0.35 + ((Math.cos(seed * 3 + k * 5.1) + 1) / 2) * 0.55);
+      const x = hx + Math.sin(a) * rr;
+      const y = Math.sqrt(Math.max(0, 1 - (rr / r) ** 2)) * h - 0.2;
+      const house = new THREE.Group();
+      house.add(box(0.45, 0.3, 0.35, lambert('#f1e3cf'), 0, 0.15, 0));
+      house.add(box(0.5, 0.08, 0.42, lambert(roofs[(k + i) % roofs.length]), 0, 0.34, 0));
+      house.position.set(x, y, -7.2 + r * 0.55);
+      scene.add(house);
+    }
+  });
+  if (withDome) {
+    // The Kigali Convention Centre's striped dome, lit at night.
+    const dome = new THREE.Group();
+    const bands = ['#00a1de', '#fad201', '#20603d', '#c7362b', '#7b3fa0'];
+    for (let k = 0; k < 5; k++) {
+      const seg = new THREE.Mesh(new THREE.SphereGeometry(1.6 - k * 0.04, 20, 4, 0, Math.PI * 2, (k * Math.PI) / 10, Math.PI / 10), glow(bands[k], bands[k]));
+      dome.add(seg);
+    }
+    dome.add(cyl(1.62, 1.62, 0.8, lambert('#d8d8d8'), 0, -0.4, 0, 20));
+    dome.scale.setScalar(1.15);
+    dome.position.set(4.2, 3.5, -5.6);
+    scene.add(dome);
+  }
+}
+
 // ---------- the street ----------
 
 function streetProps(scene, area, colors = {}, anims = []) {
@@ -448,15 +525,17 @@ function streetProps(scene, area, colors = {}, anims = []) {
       scene.add(umbrella);
     }
   }
-  // Palm trees.
-  for (const px of [-6.2, 6.0]) {
-    scene.add(cyl(0.12, 0.18, 2.6, lambert('#8a6a45'), px, 1.3, -1.8));
-    for (let k = 0; k < 6; k++) {
-      const leaf = box(1.4, 0.05, 0.35, lambert('#2e8b3e'), px, 2.6, -1.8);
-      leaf.rotation.y = k * Math.PI / 3;
-      leaf.rotation.z = -0.35;
-      leaf.translateX(0.6);
-      scene.add(leaf);
+  // Trees: palms in Abidjan, baobabs in Dakar, jacarandas and banana plants in Kigali.
+  for (const px of [-6.2, 6.0]) addTree(scene, colors.trees ?? 'palm', px, -1.8);
+  if (colors.trees === 'jacaranda') for (const bx of [-2.4, 1.7]) addTree(scene, 'banana', bx, -2.35, 0.75);
+  // Kigali: rolling green hills dotted with houses behind the street, and the Convention Centre dome.
+  if (colors.backdrop === 'hills') addHills(scene, seed, area.id === 'kimihurura' || area.id === 'city' || colors.dome);
+  // Kigali's famously tidy pavements have flower beds along the kerb.
+  if (colors.flowerBeds) {
+    for (const fx of [-3.2, 1.2, 5.4]) {
+      scene.add(box(1.6, 0.18, 0.45, lambert('#8a7a66'), fx, 0.09, 2.6));
+      scene.add(box(1.5, 0.08, 0.38, lambert('#3a7d2c'), fx, 0.2, 2.6));
+      for (let k = 0; k < 5; k++) scene.add(ball(0.09, lambert(['#e83f6f', '#fad201', '#ffffff', '#b07fd6', '#ff8a3d'][k]), fx - 0.6 + k * 0.3, 0.3, 2.6 + (k % 2 ? 0.08 : -0.08)));
     }
   }
   // Street lamps along the kerb, with sagging electric wires between them.
@@ -511,6 +590,31 @@ function streetProps(scene, area, colors = {}, anims = []) {
       car.position.set(dir * pos, 0, lane);
     });
   });
+  // Moto-taxis weaving through, riders in helmets and vests.
+  for (let k = 0; k < (colors.motos ?? 0); k++) {
+    const m = new THREE.Group();
+    m.add(box(1.0, 0.35, 0.25, lambert(['#c7362b', '#1d1b16'][k % 2]), 0, 0.45, 0));
+    for (const wx of [-0.38, 0.38]) {
+      const w = cyl(0.22, 0.22, 0.1, lambert('#1d1b16'), wx, 0.22, 0);
+      w.rotation.x = Math.PI / 2;
+      m.add(w);
+    }
+    m.add(box(0.28, 0.5, 0.32, lambert(colors.motoVest ?? '#20603d'), -0.05, 0.9, 0));
+    m.add(ball(0.17, lambert('#4a2c1a'), 0.02, 1.27, 0));
+    m.add(ball(0.2, lambert('#fad201'), -0.02, 1.33, 0));
+    m.add(box(0.28, 0.42, 0.3, lambert('#1f5fbf'), -0.4, 0.85, 0));
+    m.add(ball(0.18, lambert('#e8e8e8'), -0.38, 1.22, 0));
+    const lane = k % 2 ? 4.95 : 3.5;
+    const dir = k % 2 ? -1 : 1;
+    m.rotation.y = dir > 0 ? 0 : Math.PI;
+    scene.add(m);
+    anims.push((tt) => {
+      const span = 22;
+      const pos = ((tt * (3.6 + k * 0.5) + k * 7) % span) - span / 2;
+      m.position.set(dir * pos, 0, lane);
+      m.position.y = Math.abs(Math.sin(tt * 12 + k)) * 0.03;
+    });
+  }
   // People walking along the far pavement.
   for (let k = 0; k < 3; k++) {
     const p = passerby(k + seed);
@@ -918,6 +1022,29 @@ export function createStage(container, handlers) {
     rug.receiveShadow = true;
     scene.add(rug);
     scene.add(pottedPlant(-4.4, -0.2), pottedPlant(-0.5, -3.5, 0.8), pottedPlant(-4.4, 3.4, 1.1));
+    if (cfg.scene?.homeArt === 'imigongo') {
+      // Imigongo: Rwanda's black, white and red geometric panels.
+      const art = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.9), new THREE.MeshLambertMaterial({ map: canvasTexture(128, 80, (g, w, h) => {
+        g.fillStyle = '#1d1b16'; g.fillRect(0, 0, w, h);
+        g.lineWidth = 6;
+        for (let r = 0; r < 4; r++) {
+          g.strokeStyle = r % 2 ? '#c7362b' : '#f4f1ea';
+          g.beginPath();
+          for (let x = 0; x <= w; x += 16) g.lineTo(x, 10 + r * 20 + ((x / 16) % 2 ? 8 : -2));
+          g.stroke();
+        }
+      }) }));
+      art.position.set(-3.4, 1.55, -ROOM.d / 2 + 0.05);
+      scene.add(art, box(1.6, 1.0, 0.04, lambert('#3a2414'), -3.4, 1.55, -ROOM.d / 2 + 0.03));
+      // An agaseke basket with its pointed lid on the shelf.
+      const basket = new THREE.Group();
+      basket.add(cyl(0.12, 0.09, 0.22, new THREE.MeshLambertMaterial({ map: waxTexture('#e8c48a', 'stripes') }), 0, 0.11, 0, 12));
+      const lid = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.32, 12), new THREE.MeshLambertMaterial({ map: waxTexture('#c7362b', 'stripes') }));
+      lid.position.y = 0.38;
+      basket.add(lid);
+      basket.position.set(-ROOM.w / 2 + 0.15, 1.48, -1.0);
+      scene.add(basket);
+    }
     buildRooms(cfg);
   }
 
