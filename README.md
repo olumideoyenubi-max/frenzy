@@ -133,3 +133,7 @@ The game saves automatically in your browser.
 ```bash
 npm test
 ```
+
+## License
+
+Copyright © 2026 Olumide Oyenubi. All rights reserved. See [LICENSE](LICENSE).
